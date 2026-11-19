@@ -142,9 +142,10 @@ final readonly class EventWaitlistStore implements EventWaitlistPersistence
     public function finishInvite(string $id, DateTimeImmutable $now, bool $accept): void
     {
         $time = Database::sqlInstant($this->db, $now);
+        $eligible = $accept ? "status = 'invited'" : "status IN ('invited', 'waiting')";
         $changed = $this->db->executeStatement(
-            "UPDATE event_registrations SET status = ?, updated_at = ?, canceled_at = ?, "
-            . "invited_at = NULL, expires_at = NULL, invite_token_hash = NULL WHERE id = ? AND status = 'invited'",
+            'UPDATE event_registrations SET status = ?, updated_at = ?, canceled_at = ?, '
+            . "invited_at = NULL, expires_at = NULL, invite_token_hash = NULL WHERE id = ? AND $eligible",
             [$accept ? 'registered' : 'canceled', $time, $accept ? null : $time, $this->encodeId($id)],
             [ParameterType::STRING, ParameterType::STRING, $accept ? ParameterType::NULL : ParameterType::STRING, $this->idType()],
         );

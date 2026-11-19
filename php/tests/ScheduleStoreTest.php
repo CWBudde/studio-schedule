@@ -27,6 +27,7 @@ use StudioSchedule\Http\WaitlistInviteEndpoint;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Mail\Renderer;
 use StudioSchedule\Service\EventRegistrationReads;
+use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\OneOffLesson;
@@ -840,6 +841,141 @@ final class ScheduleStoreTest extends TestCase
         );
     }
 
+    public function testSignedInEventInvitesCheckFamilyAndSettleUnderTheEventLock(): void
+    {
+        $this->database->executeStatement("UPDATE events SET capacity = 3 WHERE slug = 'winter-workshop'");
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-01 00:00:00', locale = 'de' WHERE email = 'member@example.test'");
+        $this->database->executeStatement("UPDATE persons SET email = 'third@example.test' WHERE given_name = 'Third'");
+        foreach ([224 => 6, 225 => 7] as $id => $person) {
+            $this->insert('event_registrations', [
+                'id' => $id, 'event_id' => 120, 'person_id' => $person, 'status' => 'waiting', 'payment' => 'paid',
+                'price' => 0, 'vat_rate_bp' => 0, 'created_at' => '2026-10-24 14:00:00', 'updated_at' => '2026-10-24 14:00:00',
+            ]);
+        }
+        $app = $this->app(self::BEFORE_RELEASE);
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member', impersonatorId: self::id(11));
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $invite = static fn(int $id, string $action): string => '/event-registrations/' . self::id($id) . '/' . $action;
+        self::post($app, $invite(222, 'accept'), null, 401);
+        self::post($app, $invite(222, 'accept'), $office, 404);
+        self::post($app, '/event-registrations/invalid/accept', $member, 422);
+        self::post($app, $invite(999, 'accept'), $member, 404);
+        self::get($app, '/event-invites/222');
+        $closed = $this->app('2026-10-26T15:00:00Z');
+        $this->database->executeStatement("UPDATE events SET signup_closes_at = '2026-10-25 18:00:00' WHERE slug = 'winter-workshop'");
+        self::assertSame('closed', self::post($closed, $invite(222, 'accept'), $member, 409)['reason']);
+        $this->database->executeStatement("UPDATE events SET signup_closes_at = NULL WHERE slug = 'winter-workshop'");
+
+        $accepted = self::post($app, $invite(222, 'accept'), $member, 200)['registration'];
+        self::assertIsArray($accepted);
+        self::assertSame('registered', $accepted['status']);
+        self::assertTrue($accepted['cancelable']);
+        self::assertArrayNotHasKey('expiresAt', $accepted);
+        self::get($app, '/event-invites/222', status: 404);
+        self::assertSame('invite-used', self::post($app, $invite(222, 'decline'), $member, 409)['reason']);
+        $notice = $this->database->fetchAssociative("SELECT recipient, body_text FROM outbox_mails WHERE template = 'event-registered'");
+        self::assertIsArray($notice);
+        self::assertSame('member@example.test', $notice['recipient']);
+        self::assertIsString($notice['body_text']);
+        self::assertStringContainsString('Ari Zebra', $notice['body_text']);
+
+        self::assertSame('invite-expired', self::post($app, $invite(223, 'leave'), $member, 409)['reason']);
+        $declined = self::post($app, $invite(224, 'decline'), $member, 200)['registration'];
+        self::assertIsArray($declined);
+        self::assertSame('canceled', $declined['status']);
+        self::assertSame(self::BEFORE_RELEASE, $declined['canceledAt']);
+        self::assertSame('invite-expired', self::post($app, $invite(224, 'accept'), $member, 409)['reason']);
+        $roster = self::get($app, '/admin/events/' . self::id(120) . '/registrations', $office)['items'];
+        self::assertIsArray($roster);
+        self::assertSame(['registered', 'registered', 'canceled', 'canceled', 'invited'], array_column($roster, 'status'));
+        self::assertSame(
+            ['event-invite', 'event-invite', 'event-invite-expired', 'event-registered'],
+            $this->database->fetchFirstColumn('SELECT template FROM outbox_mails ORDER BY template'),
+        );
+
+        $actor = $this->postgres ? self::id(11) : hex2bin(str_replace('-', '', self::id(11)));
+        $audit = $this->database->fetchAllAssociative('SELECT actor_id, action, target_kind FROM audit_events ORDER BY action');
+        self::assertSame([
+            ['actor_id' => $actor, 'action' => 'event-registration-added', 'target_kind' => 'person'],
+            ['actor_id' => $actor, 'action' => 'event-registration-canceled', 'target_kind' => 'person'],
+        ], $audit);
+    }
+
+    public function testEventSignupAndDeskRegistrationValidateAndRespectCapacity(): void
+    {
+        $app = $this->app(self::BEFORE_RELEASE);
+        $member = new SessionPrincipal(self::id(10), self::id(1), 'member');
+        $office = new SessionPrincipal(self::id(11), self::id(5), 'office');
+        $admin = '/admin/events/' . self::id(120) . '/registrations';
+        $signup = '/events/winter-workshop/registrations';
+        $waitlist = '/events/winter-workshop/waitlist';
+        self::post($app, $admin, $member, 403, []);
+        self::post($app, $admin, $office, 422, []);
+        self::post($app, $admin, $office, 422, ['guest' => true]);
+        self::post($app, $admin, $office, 422, ['guest' => ['nmae' => 'Misspelled']]);
+        self::post($app, $admin, $office, 422, ['guest' => ['name' => 42]]);
+        self::post($app, $admin, $office, 422, ['guest' => ['name' => '   ', 'email' => 'guest@example.test']]);
+        self::post($app, $admin, $office, 422, ['guest' => ['name' => 'Desk guest']]);
+        self::post($app, $admin, $office, 422, ['personId' => self::id(998)]);
+        $draft = '/admin/events/' . self::id(121) . '/registrations';
+        self::assertSame('closed', self::post($app, $draft, $office, 409, ['personId' => self::id(4)])['reason']);
+        self::post($app, '/events/draft-workshop/registrations', $member, 404, ['personId' => self::id(6)]);
+        self::post($app, $signup, $member, 422, []);
+        self::post($app, $signup, $member, 404, ['personId' => self::id(4)]);
+        self::assertSame('not-full', self::post($app, $waitlist, $member, 409, ['personId' => self::id(6)])['reason']);
+
+        $desk = self::post($app, $admin, $office, 201, ['personId' => self::id(4)]);
+        self::assertSame('registered', $desk['status']);
+        self::assertSame('paid', $desk['payment']);
+        $registered = self::post($app, $signup, $member, 201, ['personId' => self::id(6)])['registration'];
+        self::assertIsArray($registered);
+        self::assertSame('registered', $registered['status']);
+        self::assertSame('paid', $registered['payment']);
+        self::assertSame('duplicate', self::post($app, $signup, $member, 409, ['personId' => self::id(6)])['reason']);
+
+        $this->database->executeStatement("UPDATE events SET capacity = 4 WHERE slug = 'winter-workshop'");
+        $person = ['personId' => self::id(3)];
+        self::assertSame('full', self::post($app, $signup, $member, 409, $person)['reason']);
+        $waiting = self::post($app, $waitlist, $member, 201, $person)['registration'];
+        self::assertIsArray($waiting);
+        self::assertSame('waiting', $waiting['status']);
+        self::assertIsString($waiting['id']);
+        $change = '/event-registrations/' . $waiting['id'];
+        self::assertSame('not-invited', self::post($app, $change . '/accept', $member, 409)['reason']);
+        self::post($app, $change . '/leave', $member, 200);
+        self::assertSame('not-waiting', self::post($app, $change . '/leave', $member, 409)['reason']);
+
+        $guest = ['guest' => ['name' => ' Desk guest ', 'email' => 'guest@example.test']];
+        self::assertSame('full', self::post($app, $admin, $office, 409, $guest)['reason']);
+        $added = self::post($app, $admin, $office, 201, $guest + ['confirmOverCapacity' => true]);
+        self::assertSame(['name' => 'Desk guest', 'email' => 'guest@example.test'], $added['guest']);
+        self::assertIsString($added['id']);
+        self::post($app, '/event-registrations/' . $added['id'] . '/accept', $member, 404);
+        self::assertSame(['event-registered'], $this->database->fetchFirstColumn('SELECT template FROM outbox_mails'));
+    }
+
+    /**
+     * @param App<ContainerInterface|null> $app
+     * @param array<string,mixed>|null $body
+     * @return array<array-key,mixed>
+     */
+    private static function post(App $app, string $path, ?SessionPrincipal $principal, int $status, ?array $body = null): array
+    {
+        $request = (new ServerRequestFactory())->createServerRequest('POST', '/api/v1' . $path)
+            ->withAttribute('sessionPrincipal', $principal);
+        if ($body !== null) {
+            $request = $request->withHeader('Content-Type', 'application/json')
+                ->withBody((new StreamFactory())->createStream(json_encode((object) $body, JSON_THROW_ON_ERROR)));
+        }
+        $response = $app->handle($request);
+        $json = (string) $response->getBody();
+        self::assertSame($status, $response->getStatusCode(), $json);
+        $result = json_decode($json, true, flags: JSON_THROW_ON_ERROR);
+        self::assertIsArray($result);
+
+        return $result;
+    }
+
     private function eventExpiryJobs(DateTimeImmutable $now): BackgroundJobs
     {
         $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
@@ -1270,8 +1406,8 @@ final class ScheduleStoreTest extends TestCase
         $app->get('/api/v1/admin/statistics', new StatisticsEndpoint(new StatisticsService(new StatisticsStore($this->database), $scheduleStore, $clock)));
         $eventStore = new EventStore($this->database);
         EventRoutes::register($app, $eventStore, $clock, $lessons);
-        $registrations = new EventRegistrationReads($eventStore, new EventRegistrationStore($this->database), $clock);
-        (new EventRegistrationRoutes($registrations))->register($app);
+        $registrationStore = new EventRegistrationStore($this->database);
+        $registrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
         $app->get('/api/v1/event-invites/{token}', new WaitlistInviteEndpoint($registrations->invite(...), $proxies, $limits));
         $waitlist = new EventWaitlist(
             $eventStore,
@@ -1281,6 +1417,10 @@ final class ScheduleStoreTest extends TestCase
             'https://school.example.test/dance/schedule',
             false,
         );
+        (new EventRegistrationRoutes(
+            $registrations,
+            static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $waitlist, $clock),
+        ))->register($app);
         $app->post('/api/v1/event-invites/{token}/accept', new WaitlistInviteEndpoint(
             static fn(string $token): ?true => $waitlist->respondByToken($token, accept: true),
             $proxies,

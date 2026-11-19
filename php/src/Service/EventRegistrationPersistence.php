@@ -5,10 +5,39 @@ declare(strict_types=1);
 namespace StudioSchedule\Service;
 
 use DateTimeImmutable;
+use StudioSchedule\Domain\Event;
 use StudioSchedule\Domain\EventRegistration;
 
+/**
+ * @phpstan-import-type Recipient from EventWaitlistPersistence
+ * @phpstan-type Guest array{name:string,email:string}
+ */
 interface EventRegistrationPersistence
 {
+    /** @phpstan-impure */
+    public function find(string $id): ?EventRegistration;
+
+    public function inFamily(string $guardianId, string $personId, bool $forUpdate = false): bool;
+
+    public function lockPerson(string $personId, bool $liveOnly): bool;
+
+    public function requireSchool(): void;
+
+    /** @param Guest|null $guest */
+    public function create(
+        Event $event,
+        ?string $personId,
+        ?array $guest,
+        string $actorId,
+        bool $waiting,
+        DateTimeImmutable $now,
+    ): EventRegistration;
+
+    /** @return Recipient */
+    public function actingRecipient(string $accountId, string $participant): array;
+
+    public function audit(EventRegistration $registration, string $actorId, bool $added, DateTimeImmutable $now): void;
+
     /** @return list<EventRegistration> */
     public function forEvent(string $eventId): array;
 

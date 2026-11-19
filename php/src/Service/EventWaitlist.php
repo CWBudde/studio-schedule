@@ -19,7 +19,6 @@ use Throwable;
  * @phpstan-import-type Entry from EventWaitlistPersistence
  * @phpstan-import-type Recipient from EventWaitlistPersistence
  * @phpstan-import-type Settings from EventWaitlistPersistence
- * @phpstan-import-type TokenOffer from EventWaitlistPersistence
  */
 final readonly class EventWaitlist
 {
@@ -83,8 +82,7 @@ final readonly class EventWaitlist
                 return null;
             }
             if (!$accept) {
-                $this->store->finishInvite($offer['id'], $now, accept: false);
-                $this->offerLocked($event, $now);
+                $this->finishLocked($event, $offer['id'], $now, accept: false, held: true);
 
                 return true;
             }
@@ -96,8 +94,9 @@ final readonly class EventWaitlist
                 return null;
             }
 
-            $this->store->finishInvite($offer['id'], $now, accept: true);
-            $this->mailAcceptance($event, $offer, $person, $sessions, $cancelUntil, $now);
+            $this->finishLocked($event, $offer['id'], $now, accept: true, held: true);
+            $contacts = $this->store->recipients([$person])[$person] ?? [];
+            $this->sendConfirmation($event, $offer['payment'], $offer['price'], $sessions, $cancelUntil, $now, $contacts);
 
             return true;
         });
@@ -121,6 +120,14 @@ final readonly class EventWaitlist
         $this->offerLocked($event, $now, $settings);
 
         return count($due);
+    }
+
+    public function finishLocked(Event $event, string $id, DateTimeImmutable $now, bool $accept, bool $held): void
+    {
+        $this->store->finishInvite($id, $now, $accept);
+        if (!$accept && $held) {
+            $this->offerLocked($event, $now);
+        }
     }
 
     /** @param Settings|null $settings */
@@ -163,11 +170,19 @@ final readonly class EventWaitlist
     }
 
     /**
-     * @param TokenOffer $offer
      * @param list<PublishedLesson> $sessions
+     * @param list<Recipient> $recipients
      */
-    private function mailAcceptance(Event $event, array $offer, string $person, array $sessions, ?DateTimeImmutable $cancelUntil, DateTimeImmutable $now): void
-    {
+    public function sendConfirmation(
+        Event $event,
+        string $payment,
+        int $price,
+        array $sessions,
+        ?DateTimeImmutable $cancelUntil,
+        DateTimeImmutable $now,
+        #[SensitiveParameter]
+        array $recipients,
+    ): void {
         $settings = $this->store->settings();
         $timezone = $settings['timezone'];
         $slots = [];
@@ -180,11 +195,11 @@ final readonly class EventWaitlist
                 ];
             }
         }
-        foreach ($this->store->recipients([$person])[$person] ?? [] as $recipient) {
+        foreach ($recipients as $recipient) {
             $locale = $this->locale($recipient, $settings);
             $data = $this->mailData($recipient, $settings, $event) + [
                 'Sessions' => $slots, 'CancelUntil' => $cancelUntil?->setTimezone($timezone),
-                'Fee' => $offer['payment'] === 'unpaid' ? (new Money($offer['price']))->format($settings['currency'], $locale) : '',
+                'Fee' => $payment === 'unpaid' ? (new Money($price))->format($settings['currency'], $locale) : '',
             ];
             $this->queueMail($recipient['email'], $locale, 'event-registered', $data, $now);
         }

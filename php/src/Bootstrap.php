@@ -60,6 +60,7 @@ use StudioSchedule\Push\Sender;
 use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Service\EventRegistrationReads;
+use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\EventWaitlist;
 use StudioSchedule\Service\AccountAdministration;
 use StudioSchedule\Service\AccountConfirmation;
@@ -329,8 +330,20 @@ final class Bootstrap
                     CatalogAdminRoutes::registerLessonCreation($app, $lessons);
                     $eventStore = new EventStore($connection);
                     EventRoutes::register($app, $eventStore, $clock, $lessons);
-                    $eventRegistrations = new EventRegistrationReads($eventStore, new EventRegistrationStore($connection), $clock);
-                    (new EventRegistrationRoutes($eventRegistrations))->register($app);
+                    $registrationStore = new EventRegistrationStore($connection);
+                    $eventRegistrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
+                    $eventWaitlist = static fn(): EventWaitlist => new EventWaitlist(
+                        $eventStore,
+                        new EventWaitlistStore($connection),
+                        $clock,
+                        $mail,
+                        $eventURL(),
+                        $pushSender() !== null,
+                    );
+                    (new EventRegistrationRoutes(
+                        $eventRegistrations,
+                        static fn(): EventRegistrationWrites => new EventRegistrationWrites($eventStore, $registrationStore, $eventWaitlist(), $clock),
+                    ))->register($app);
                     $familyStore = new FamilyStore($connection);
                     $duplicates = new DuplicateStore($connection, $memberDirectory, $familyStore, $clock);
                     (new DuplicateRoutes(new PersonDuplicates($duplicates)))->register($app);
@@ -363,25 +376,13 @@ final class Bootstrap
                         $config->trustedProxies,
                         $limits,
                     ));
-                    $respond = static function (#[SensitiveParameter] string $token, bool $accept) use ($eventStore, $connection, $clock, $mail, $eventURL, $pushSender): ?true {
-                        $waitlist = new EventWaitlist(
-                            $eventStore,
-                            new EventWaitlistStore($connection),
-                            $clock,
-                            $mail,
-                            $eventURL(),
-                            $pushSender() !== null,
-                        );
-
-                        return $waitlist->respondByToken($token, $accept);
-                    };
                     $app->post('/api/v1/event-invites/{token}/accept', new WaitlistInviteEndpoint(
-                        static fn(#[SensitiveParameter] string $token): ?true => $respond($token, true),
+                        static fn(#[SensitiveParameter] string $token): ?true => $eventWaitlist()->respondByToken($token, accept: true),
                         $config->trustedProxies,
                         $limits,
                     ));
                     $app->post('/api/v1/event-invites/{token}/decline', new WaitlistInviteEndpoint(
-                        static fn(#[SensitiveParameter] string $token): ?true => $respond($token, false),
+                        static fn(#[SensitiveParameter] string $token): ?true => $eventWaitlist()->respondByToken($token, accept: false),
                         $config->trustedProxies,
                         $limits,
                     ));

@@ -12,6 +12,8 @@ use DateTimeImmutable;
  */
 final readonly class EventRegistration
 {
+    public const string ANONYMOUS_GUEST_NAME = 'Guest';
+
     /**
      * @param Person|null $person
      * @param Guest|null $guest

@@ -6,10 +6,13 @@ namespace StudioSchedule\Store;
 
 use DateTimeImmutable;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
 use RuntimeException;
+use StudioSchedule\Domain\Event;
 use StudioSchedule\Domain\EventRegistration;
+use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\EventRegistrationPersistence;
 use Symfony\Component\Uid\Uuid;
 
@@ -24,6 +27,98 @@ final readonly class EventRegistrationStore implements EventRegistrationPersiste
         SQL;
 
     public function __construct(private Connection $connection) {}
+
+    public function find(string $id): ?EventRegistration
+    {
+        $row = $this->connection->fetchAssociative(
+            self::REGISTRATIONS . ' WHERE r.id = ?',
+            [$this->encodeId($id)],
+            [$this->idType()],
+        );
+
+        return $row === false ? null : $this->registration($row);
+    }
+
+    public function inFamily(string $guardianId, string $personId, bool $forUpdate = false): bool
+    {
+        return $guardianId === $personId || (new FamilyStore($this->connection))->isGuardian($guardianId, $personId, $forUpdate);
+    }
+
+    public function lockPerson(string $personId, bool $liveOnly): bool
+    {
+        if ($liveOnly) {
+            return (new FamilyStore($this->connection))->lockLivePersons($personId);
+        }
+
+        return $this->connection->fetchOne(
+            'SELECT id FROM persons WHERE id = ? FOR UPDATE',
+            [$this->encodeId($personId)],
+            [$this->idType()],
+        ) !== false;
+    }
+
+    public function requireSchool(): void
+    {
+        (new FamilyStore($this->connection))->schoolTimezone();
+    }
+
+    public function create(
+        Event $event,
+        ?string $personId,
+        ?array $guest,
+        string $actorId,
+        bool $waiting,
+        DateTimeImmutable $now,
+    ): EventRegistration {
+        $uuid = Uuid::v7()->toRfc4122();
+        $at = Database::sqlInstant($this->connection, $now);
+        try {
+            $this->connection->insert('event_registrations', [
+                'id' => $this->encodeId($uuid), 'event_id' => $this->encodeId($event->id),
+                'person_id' => $personId === null ? null : $this->encodeId($personId),
+                'guest_name' => $guest['name'] ?? null,
+                'guest_email' => ($guest['email'] ?? '') === '' ? null : $guest['email'],
+                'status' => $waiting ? 'waiting' : 'registered', 'payment' => $event->price === 0 ? 'paid' : 'unpaid',
+                'price' => $event->price, 'vat_rate_bp' => $event->vatRate,
+                'registered_by' => $this->encodeId($actorId), 'created_at' => $at, 'updated_at' => $at,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            throw new CatalogFailure(409, 'a record with these values exists already', reason: 'duplicate');
+        }
+
+        return $this->find($uuid) ?? throw new RuntimeException('The new event registration was not stored');
+    }
+
+    public function actingRecipient(string $accountId, string $participant): array
+    {
+        $row = $this->connection->fetchAssociative(
+            'SELECT a.email, a.locale, p.given_name FROM accounts a JOIN persons p ON p.id = a.person_id WHERE a.id = ?',
+            [$this->encodeId($accountId)],
+            [$this->idType()],
+        );
+        if ($row === false) {
+            throw new RuntimeException('The registering account no longer exists');
+        }
+
+        return [
+            'email' => self::text($row['email']), 'locale' => $row['locale'] === null ? '' : self::text($row['locale']),
+            'givenName' => self::text($row['given_name']), 'participant' => $participant, 'accountId' => $accountId,
+        ];
+    }
+
+    public function audit(EventRegistration $registration, string $actorId, bool $added, DateTimeImmutable $now): void
+    {
+        $person = $registration->person['id'] ?? null;
+        $target = $person === null ? null : $this->encodeId($person);
+        (new AdminAccountsStore($this->connection))->audit(
+            $actorId,
+            $added ? 'event-registration-added' : 'event-registration-canceled',
+            $target === null ? null : 'person',
+            $target,
+            $now,
+            ['eventId' => $registration->eventId, 'registrationId' => $registration->id],
+        );
+    }
 
     public function forEvent(string $eventId): array
     {

@@ -4,18 +4,26 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use Closure;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Http\Server\RequestHandlerInterface;
 use SensitiveParameter;
 use Slim\App;
+use stdClass;
 use StudioSchedule\Domain\Id;
+use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\EventRegistrationReads;
+use StudioSchedule\Service\EventRegistrationWrites;
 use StudioSchedule\Service\SessionPrincipal;
+use StudioSchedule\Service\SettingsNotFound;
+use StudioSchedule\Service\SetupInput;
 
 final readonly class EventRegistrationRoutes
 {
-    public function __construct(private EventRegistrationReads $registrations) {}
+    /** @param Closure():EventRegistrationWrites $writes */
+    public function __construct(private EventRegistrationReads $registrations, private Closure $writes) {}
 
     /**
      * @template TContainer of ContainerInterface|null
@@ -25,21 +33,124 @@ final readonly class EventRegistrationRoutes
     {
         $app->get('/api/v1/admin/events/{eventId}/registrations', $this->office(...))->add(CatalogAdminRoutes::requireOffice(...));
         $app->get('/api/v1/my/events', $this->mine(...));
+        $app->post('/api/v1/admin/events/{eventId}/registrations', $this->desk(...))->add(CatalogAdminRoutes::requireOffice(...));
+        $app->post('/api/v1/events/{slug}/{action:registrations|waitlist}', $this->signup(...))->add(self::requireSignedIn(...));
+        $app->post('/api/v1/event-registrations/{registrationId}/{action:accept|decline|leave}', $this->respond(...))
+            ->add(self::requireSignedIn(...));
     }
 
     /** @param array{eventId:string} $args */
     private function office(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
     {
-        $id = $args['eventId'];
-        if (!Id::valid($id) || stripos($request->getUri()->getPath(), '%2f') !== false) {
-            return Responses::problem($request, 422, 'validation failed', errors: [
-                ['location' => 'path.eventId', 'message' => 'invalid ID'],
-            ]);
-        }
-        $items = $this->registrations->office(strtolower($id));
+        $items = $this->registrations->office(self::pathId($request, $args['eventId'], 'eventId'));
 
         return $items === null ? Responses::problem($request, 404, 'resource not found')
             : Responses::json($response, ['items' => $items])->withHeader('Cache-Control', 'no-store');
+    }
+
+    /** @param array{eventId:string} $args */
+    private function desk(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $id = self::pathId($request, $args['eventId'], 'eventId');
+        $body = CatalogAdminRoutes::fields($request, ['personid', 'guest', 'confirmovercapacity']);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $person = CatalogAdminRoutes::optionalId($body, 'personId');
+        $guest = $body['guest'] ?? null;
+        if (($person === null) === ($guest === null)) {
+            throw new CatalogFailure(422, 'give either a person or a guest', 'body');
+        }
+        $confirm = CatalogAdminRoutes::flag($body, 'confirmOverCapacity');
+
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+        $registration = ($this->writes)()->desk($principal, $id, $person, $guest === null ? null : self::guest($guest), $confirm);
+
+        return Responses::json($response->withStatus(201), $registration);
+    }
+
+    /** @return array{name:string,email:string} */
+    private static function guest(#[SensitiveParameter] mixed $input): array
+    {
+        if (!$input instanceof stdClass) {
+            throw CatalogFailure::field('guest', 'expected object');
+        }
+        $fields = [];
+        foreach (get_object_vars($input) as $key => $value) {
+            $field = strtolower((string) $key);
+            if (!in_array($field, ['name', 'email'], true)) {
+                throw CatalogFailure::field("guest.$key", 'unexpected property');
+            }
+            $fields[$field] = $value;
+        }
+        try {
+            return [
+                'name' => SetupInput::trim(CatalogAdminRoutes::text($fields, 'name', 200, true)),
+                'email' => SetupInput::trim(CatalogAdminRoutes::text($fields, 'email', 254) ?? ''),
+            ];
+        } catch (CatalogFailure $failure) {
+            $field = $failure->location === 'body' ? 'guest' : 'guest.' . substr($failure->location, strlen('body.'));
+            throw CatalogFailure::field($field, $failure->getMessage());
+        }
+    }
+
+    /** @param array{slug:string,action:'registrations'|'waitlist'} $args */
+    private function signup(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $slug = $args['slug'];
+        $problem = EventRoutes::slugProblem($request, $slug);
+        if ($problem !== null) {
+            return $problem;
+        }
+        $body = CatalogAdminRoutes::fields($request, ['personid']);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+        $result = ($this->writes)()->signup(
+            $principal,
+            $slug,
+            CatalogAdminRoutes::requiredId($body, 'personId'),
+            $args['action'] === 'waitlist',
+        );
+
+        return Responses::json($response->withStatus(201), $result);
+    }
+
+    /** @param array{registrationId:string,action:'accept'|'decline'|'leave'} $args */
+    private function respond(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+    {
+        $principal = $request->getAttribute('sessionPrincipal');
+        assert($principal instanceof SessionPrincipal);
+        $id = self::pathId($request, $args['registrationId'], 'registrationId');
+
+        return Responses::json($response, ($this->writes)()->respond($principal, $id, $args['action']));
+    }
+
+    private static function pathId(ServerRequestInterface $request, string $id, string $field): string
+    {
+        if (!Id::valid($id) || stripos($request->getUri()->getPath(), '%2f') !== false) {
+            throw new CatalogFailure(422, 'invalid ID', "path.$field");
+        }
+
+        return strtolower($id);
+    }
+
+    private static function requireSignedIn(#[SensitiveParameter] ServerRequestInterface $request, RequestHandlerInterface $next): ResponseInterface
+    {
+        if (!$request->getAttribute('sessionPrincipal') instanceof SessionPrincipal) {
+            return Responses::problem($request, 401, 'not signed in');
+        }
+
+        try {
+            return $next->handle($request);
+        } catch (CatalogFailure $failure) {
+            return CatalogAdminRoutes::failure($request, $failure);
+        } catch (SettingsNotFound) {
+            return Responses::problem($request, 404, 'resource not found');
+        }
     }
 
     private function mine(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface

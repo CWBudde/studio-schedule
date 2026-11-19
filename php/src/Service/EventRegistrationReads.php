@@ -111,7 +111,7 @@ final readonly class EventRegistrationReads
     }
 
     /** @return array<string,mixed> */
-    private static function officeDocument(EventRegistration $registration): array
+    public static function officeDocument(EventRegistration $registration): array
     {
         return self::baseDocument($registration) + [
             'eventId' => $registration->eventId,
@@ -128,7 +128,7 @@ final readonly class EventRegistrationReads
      * @param array<string,mixed> $event
      * @return array<string,mixed>
      */
-    private static function myDocument(EventRegistration $registration, array $event, DateTimeImmutable $now): array
+    public static function myDocument(EventRegistration $registration, array $event, DateTimeImmutable $now): array
     {
         assert($registration->person !== null);
         $deadline = $event['cancelUntil'] ?? null;

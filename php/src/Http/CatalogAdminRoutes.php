@@ -309,14 +309,19 @@ final readonly class CatalogAdminRoutes
         try {
             return $next->handle($request);
         } catch (CatalogFailure $failure) {
-            if ($failure->status === 422) {
-                return Responses::problem($request, 422, 'validation failed', errors: [
-                    ['location' => $failure->location, 'message' => $failure->getMessage()],
-                ]);
-            }
-
-            return Responses::problem($request, $failure->status, $failure->getMessage(), reason: $failure->reason);
+            return self::failure($request, $failure);
         }
+    }
+
+    public static function failure(ServerRequestInterface $request, CatalogFailure $failure): ResponseInterface
+    {
+        if ($failure->status === 422) {
+            return Responses::problem($request, 422, 'validation failed', errors: [
+                ['location' => $failure->location, 'message' => $failure->getMessage()],
+            ]);
+        }
+
+        return Responses::problem($request, $failure->status, $failure->getMessage(), reason: $failure->reason);
     }
 
     private function write(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, CatalogResource $resource, ?string $id): ResponseInterface

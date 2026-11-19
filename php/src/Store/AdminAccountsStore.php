@@ -144,7 +144,7 @@ final readonly class AdminAccountsStore
     }
 
     /** @param array<string,string> $details */
-    public function audit(?string $actor, string $action, string $kind, string $target, DateTimeImmutable $now, array $details = []): void
+    public function audit(?string $actor, string $action, ?string $kind, ?string $target, DateTimeImmutable $now, array $details = []): void
     {
         $this->connection->executeStatement(
             'INSERT INTO audit_events (id, occurred_at, actor_id, action, target_kind, target_id, target_person_id, details) '

@@ -247,7 +247,7 @@ final readonly class EventRoutes
         return Responses::image($response, $asset, $request->getMethod() === 'HEAD');
     }
 
-    private static function slugProblem(ServerRequestInterface $request, string $slug): ?ResponseInterface
+    public static function slugProblem(ServerRequestInterface $request, string $slug): ?ResponseInterface
     {
         if (mb_strlen($slug, 'UTF-8') > 80) {
             return Responses::problem($request, 422, 'validation failed', errors: [

@@ -1608,6 +1608,13 @@ backends.
           mail and configured push notifications in the same event transaction. Let recipients
           accept or decline by token. Tests cover expiry, mounted links, single-use tokens and
           per-event rollback on all three databases.
+    - [x] Let members register their family, join or leave the waitlist, and accept or decline
+          a held place while signed in. Let the office register a person or guest and explicitly
+          confirm exceeding capacity. The shared `event_signup` case runs in PHP CI on all
+          three databases at both mount paths and verifies confirmation mail and audit records.
+    - [ ] Let the office edit events and cancel an event with its future sessions and registrations.
+    - [ ] Let members and the office cancel individual registrations, including eligible refunds.
+    - [ ] Let the office record event payments and issue receipts.
 - [ ] CLI parity: port the operator commands to the PHP `bin/studio-schedule` executable.
       The Phase 11 admin commands and Phase 12 MCP server stay Go-only (ADR 0023). On PostgreSQL
       a school can run the Go binary against its database. On MySQL and MariaDB it uses the web
