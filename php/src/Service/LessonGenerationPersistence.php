@@ -12,13 +12,17 @@ use StudioSchedule\Domain\ScheduleRules;
 /**
  * @phpstan-type TermRow array{id: string, starts_on: string, ends_on: string}
  * @phpstan-type ClassRow array{id: string, course_type_id: string, room_id: string, instructor_id: string, accompanist_id: ?string,
- *     weekday: int|numeric-string, start_time: string, duration_micros: int|numeric-string, capacity: int|numeric-string}
+ *     weekday: int|numeric-string, start_time: string, duration_micros: int|numeric-string, capacity: int|numeric-string, retired: bool}
  * @phpstan-type MemberRow array{person_id: string, since: ?string, paused_until: ?string}
  */
 interface LessonGenerationPersistence
 {
-    /** @param Closure():int $generate */
-    public function generateInTransaction(Closure $generate): int;
+    /**
+     * @template T
+     * @param Closure():T $operation
+     * @return T
+     */
+    public function write(Closure $operation): mixed;
 
     public function lockRules(): ScheduleRules;
 
@@ -28,7 +32,7 @@ interface LessonGenerationPersistence
     public function lockTerms(Date $from, Date $until): array;
 
     /** @return list<ClassRow> */
-    public function lockClasses(string $term): array;
+    public function lockClasses(string $term, bool $includeRetired = false): array;
 
     /** @return list<string> */
     public function lockSlotDates(string $class, Date $from): array;

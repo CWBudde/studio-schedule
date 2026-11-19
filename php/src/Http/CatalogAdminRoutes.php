@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Http;
 
+use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -12,10 +13,12 @@ use SensitiveParameter;
 use Slim\App;
 use Slim\Routing\RouteCollectorProxy;
 use StudioSchedule\Domain\CatalogResource;
+use StudioSchedule\Domain\Date;
 use StudioSchedule\Domain\Id;
 use StudioSchedule\Service\CatalogAdmin;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\SessionPrincipal;
+use StudioSchedule\Service\TermAdmin;
 
 /** @phpstan-import-type CatalogData from \StudioSchedule\Service\CatalogAdminPersistence */
 final readonly class CatalogAdminRoutes
@@ -41,6 +44,48 @@ final readonly class CatalogAdminRoutes
             $routes->get('/admin/staff', fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
                 => Responses::json($response, ['items' => $this->service->allStaff()]));
         })->add(self::requireOffice(...));
+    }
+
+    /**
+     * @template TContainer of ContainerInterface|null
+     * @param App<TContainer> $app
+     */
+    public static function registerTerms(App $app, TermAdmin $service): void
+    {
+        $app->group('/api/v1/terms', static function (RouteCollectorProxy $routes) use ($service): void {
+            $routes->post('', static fn(ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
+                => self::writeTerm($request, $response, $service, null));
+            $routes->map(['PUT', 'DELETE'], '/{id}', static fn(ServerRequestInterface $request, ResponseInterface $response, array $args): ResponseInterface
+                => self::writeTerm($request, $response, $service, self::id($args['id'] ?? null, 'path.termId')));
+        })->add(self::requireOffice(...));
+    }
+
+    private static function writeTerm(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response, TermAdmin $service, ?string $id): ResponseInterface
+    {
+        if ($request->getMethod() === 'DELETE' && $id !== null) {
+            $service->delete($id);
+
+            return $response->withStatus(204);
+        }
+        $body = self::fields($request, ['name', 'startson', 'endson']);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $name = self::text($body, 'name', 100, true);
+        $startsOn = self::date($body, 'startsOn');
+        $endsOn = self::date($body, 'endsOn');
+
+        return Responses::json($response->withStatus($id === null ? 201 : 200), $service->save($id, $name, $startsOn, $endsOn));
+    }
+
+    /** @param array<array-key,mixed> $body */
+    private static function date(array $body, string $field): Date
+    {
+        try {
+            return Date::parse(self::text($body, $field, 10, true));
+        } catch (InvalidArgumentException) {
+            throw CatalogFailure::field($field, 'expected a calendar date in YYYY-MM-DD form');
+        }
     }
 
     private static function requireOffice(#[SensitiveParameter] ServerRequestInterface $request, RequestHandlerInterface $next): ResponseInterface
@@ -205,7 +250,10 @@ final readonly class CatalogAdminRoutes
         return $body[$key] ?? null;
     }
 
-    /** @param array<array-key,mixed> $body */
+    /**
+     * @param array<array-key,mixed> $body
+     * @return ($required is true ? string : ?string)
+     */
     private static function text(array $body, string $field, int $max, bool $required = false): ?string
     {
         $value = self::value($body, $field, $required);

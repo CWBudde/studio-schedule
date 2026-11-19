@@ -240,6 +240,7 @@ func TestBackendConformance(t *testing.T) {
 	}{
 		{"public settings and catalog", publicCatalog},
 		{"catalog administration", catalogAdministration},
+		{"term administration", termAdministration},
 		{"public event details", publicEventDetails},
 		{"schedule release and visibility", publicSchedule},
 		{"registration and session", registrationSession},

@@ -683,6 +683,103 @@ final class PublicSettingsTest extends TestCase
         self::assertSame('2026-12-27', $this->db->fetchOne('SELECT MAX(slot_date) FROM lessons'));
     }
 
+    public function testOfficeCanCreateRenameAndDeleteAnEmptyTerm(): void
+    {
+        $this->initialize();
+        $this->openSettingsSession();
+        $values = ['name' => ' Trial term ', 'startsOn' => '2026-10-25', 'endsOn' => '2026-10-25'];
+        self::assertSame(401, $this->apiRequest('POST', '/terms', $values, signedIn: false)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'member'");
+        self::assertSame(403, $this->apiRequest('POST', '/terms', $values)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        foreach ([['name' => '   '], ['startsOn' => '2026-02-30'], ['endsOn' => '2026-10-24']] as $invalid) {
+            $response = $this->apiRequest('POST', '/terms', $invalid + $values);
+            self::assertSame(422, $response->getStatusCode());
+        }
+        $created = $this->apiRequest('POST', '/terms', $values);
+        self::assertSame(201, $created->getStatusCode());
+        $term = self::decoded($created);
+        self::assertIsString($term['id']);
+        self::assertSame(['id' => $term['id'], 'name' => 'Trial term', 'startsOn' => '2026-10-25', 'endsOn' => '2026-10-25'], $term);
+        $path = '/terms/' . $term['id'];
+        $update = self::decoded($this->apiRequest('PUT', $path, ['name' => 'New term', 'endsOn' => '2026-11-05'] + $values));
+        self::assertSame(['id' => $term['id'], 'name' => 'New term', 'startsOn' => '2026-10-25', 'endsOn' => '2026-11-05'], $update);
+        self::assertSame(['items' => [$update]], self::decoded($this->apiRequest('GET', '/terms', signedIn: false)));
+        self::assertSame(204, $this->apiRequest('DELETE', $path)->getStatusCode());
+        self::assertSame(404, $this->apiRequest('PUT', $path, $values)->getStatusCode());
+        self::assertSame(404, $this->apiRequest('DELETE', $path)->getStatusCode());
+    }
+
+    public function testTermDatesRefitLessonsAtomicallyAndProtectBookingHistory(): void
+    {
+        $clock = $this->generationFixture();
+        $term = $this->db->fetchOne('SELECT id FROM terms');
+        self::assertIsString($term);
+        $termId = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform ? $term : Uuid::fromBinary($term)->toRfc4122();
+        $path = '/terms/' . $termId;
+        $values = ['name' => 'Renamed autumn', 'startsOn' => '2026-10-18', 'endsOn' => '2026-11-15'];
+        self::assertSame(200, $this->apiRequest('PUT', $path, $values, clock: $clock)->getStatusCode());
+        self::assertSame(['2026-10-27'], $this->db->fetchFirstColumn('SELECT slot_date FROM lessons'));
+        self::assertSame(200, $this->apiRequest('PUT', $path, ['endsOn' => '2026-11-29'] + $values, clock: $clock)->getStatusCode());
+        $all = ['2026-10-25', '2026-10-27', '2026-11-08', '2026-11-15', '2026-11-22', '2026-11-29'];
+        self::assertSame($all, $this->db->fetchFirstColumn('SELECT slot_date FROM lessons ORDER BY slot_date'));
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM booking_events'), [8, '8']);
+
+        $this->db->executeStatement("UPDATE lessons SET detached = TRUE, starts_at = '2026-11-14 12:00:00', ends_at = '2026-11-14 12:45:00' WHERE slot_date = '2026-11-22'");
+        $this->db->executeStatement("UPDATE lessons SET detached = TRUE, status = 'canceled', canceled_at = '2026-10-25 00:00:00' WHERE slot_date = '2026-11-29'");
+        $this->db->executeStatement(
+            'INSERT INTO bookings (id, lesson_id, person_id, status, trial, booked_at, canceled_at, source) '
+            . "SELECT ?, l.id, a.person_id, 'canceled', FALSE, '2026-10-24 10:00:00', '2026-10-24 12:00:00', 'self' "
+            . "FROM lessons l CROSS JOIN accounts a WHERE l.slot_date = '2026-11-29'",
+            [$this->fixtureId()],
+        );
+        $refused = $this->apiRequest('PUT', $path, $values, clock: $clock);
+        self::assertSame(422, $refused->getStatusCode());
+        self::assertSame([['location' => 'body.endsOn', 'message' => 'the lesson of 2026-11-29 would lie outside the term, but it has bookings']], self::decoded($refused)['errors']);
+        self::assertSame('2026-11-29', $this->db->fetchOne('SELECT ends_on FROM terms'));
+        self::assertSame($all, $this->db->fetchFirstColumn('SELECT slot_date FROM lessons ORDER BY slot_date'));
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM booking_events'), [8, '8']);
+
+        $this->db->executeStatement("DELETE FROM bookings WHERE source = 'self'");
+        self::assertSame(200, $this->apiRequest('PUT', $path, $values, clock: $clock)->getStatusCode());
+        self::assertSame(array_slice($all, 0, 4), $this->db->fetchFirstColumn('SELECT slot_date FROM lessons ORDER BY slot_date'));
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM bookings'), [4, '4']);
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM booking_events'), [4, '4']);
+
+        $late = self::createStub(ClockInterface::class);
+        $late->method('now')->willReturn(new DateTimeImmutable('2026-10-25T01:00:00Z'));
+        $refused = $this->apiRequest('PUT', $path, ['startsOn' => '2026-10-26'] + $values, clock: $late);
+        self::assertSame(422, $refused->getStatusCode());
+        self::assertSame([['location' => 'body.startsOn', 'message' => 'the lesson of 2026-10-25 would lie outside the term, but it has started']], self::decoded($refused)['errors']);
+        $inUse = $this->apiRequest('DELETE', $path, clock: $late);
+        self::assertSame(409, $inUse->getStatusCode());
+        self::assertSame('in-use', self::decoded($inUse)['reason']);
+    }
+
+    public function testTermCannotExcludeAnEarlyLessonOfARetiredClass(): void
+    {
+        $postgres = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        $year = $postgres ? '0001' : '1000';
+        $clock = $this->generationFixture(new DateTimeImmutable("$year-06-01T00:00:00Z"));
+        $start = new DateTimeImmutable($postgres ? '0000-12-31T23:30:00Z' : '1000-01-01T00:00:00Z');
+        $slot = "$year-01-01";
+        $this->db->executeStatement('UPDATE terms SET starts_on = ?', [$slot]);
+        $this->db->executeStatement(
+            'UPDATE lessons SET class_id = (SELECT id FROM classes WHERE retired = TRUE), slot_date = ?, starts_at = ?, ends_at = ?',
+            [$slot, Database::sqlInstant($this->db, $start), Database::sqlInstant($this->db, $start->modify('+45 minutes'))],
+        );
+        $term = $this->db->fetchOne('SELECT id FROM terms');
+        self::assertIsString($term);
+        $termId = $postgres ? $term : Uuid::fromBinary($term)->toRfc4122();
+        $values = ['name' => 'Autumn', 'startsOn' => "$year-01-02", 'endsOn' => '2026-11-15'];
+
+        $response = $this->apiRequest('PUT', '/terms/' . $termId, $values, clock: $clock);
+        self::assertSame(422, $response->getStatusCode());
+        self::assertSame([['location' => 'body.startsOn', 'message' => "the lesson of $slot would lie outside the term, but it has started"]], self::decoded($response)['errors']);
+        self::assertSame($slot, $this->db->fetchOne('SELECT starts_on FROM terms'));
+        self::assertSame($slot, $this->db->fetchOne('SELECT slot_date FROM lessons'));
+    }
+
     /** @return array<string, int|string> */
     private static function generationRules(): array
     {
@@ -693,10 +790,10 @@ final class PublicSettingsTest extends TestCase
         ];
     }
 
-    private function generationFixture(): ClockInterface
+    private function generationFixture(?DateTimeImmutable $now = null): ClockInterface
     {
         $this->initialize();
-        $now = new DateTimeImmutable('2026-10-25T00:00:00Z');
+        $now ??= new DateTimeImmutable('2026-10-25T00:00:00Z');
         $this->openSettingsSession($now);
         $clock = self::createStub(ClockInterface::class);
         $clock->method('now')->willReturn($now);
@@ -767,7 +864,13 @@ final class PublicSettingsTest extends TestCase
     /** @param array<string, mixed>|null $body */
     private function adminRequest(string $method, string $path, ?array $body = null, bool $signedIn = true, ?ClockInterface $clock = null): ResponseInterface
     {
-        $request = (new ServerRequestFactory())->createServerRequest($method, '/studio/api/v1/admin/settings/' . $path);
+        return $this->apiRequest($method, '/admin/settings/' . $path, $body, $signedIn, $clock);
+    }
+
+    /** @param array<string, mixed>|null $body */
+    private function apiRequest(string $method, string $path, ?array $body = null, bool $signedIn = true, ?ClockInterface $clock = null): ResponseInterface
+    {
+        $request = (new ServerRequestFactory())->createServerRequest($method, '/studio/api/v1' . $path);
         if ($signedIn) {
             $request = $request->withCookieParams(['studio_session' => 'fixture-settings-session']);
         }

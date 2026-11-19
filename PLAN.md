@@ -1442,6 +1442,10 @@ backends.
           orders are saved as a whole, and inactive staff appear in the office list. The shared
           `catalog_administration` case passes at both mount paths on all three PHP databases with
           the authentication draft.
+    - [x] Let the office create, update and delete terms. Date changes reconcile future lessons
+          and protect started lessons and bookings made outside automatic class enrollment.
+          The shared `term_administration` case passes at both mount paths on all three PHP
+          databases with the authentication draft.
   - [ ] Booking, participants, waiting list with invites (ADR 0009, 0010), with the same lock
         order (`SELECT … FOR UPDATE` on all three databases, term → class → lesson → passes)
   - [ ] Calendar feeds (ADR 0011)

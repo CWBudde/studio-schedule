@@ -15,11 +15,11 @@ use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Store\JobLocks;
 use StudioSchedule\Store\JobRunStore;
-use StudioSchedule\Store\LessonGenerationStore;
 use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\PushOutboxStore;
 use StudioSchedule\Store\RetentionStore;
 use StudioSchedule\Store\SessionStore;
+use StudioSchedule\Store\TimetableStore;
 
 final readonly class BackgroundJobs
 {
@@ -52,7 +52,7 @@ final readonly class BackgroundJobs
     public function generateLessons(): ?JobResult
     {
         return $this->runner->runDue(self::GENERATE_LESSONS, new DateInterval('PT1H'), function (): void {
-            $generator = new LessonGenerator(new LessonGenerationStore($this->database), $this->clock);
+            $generator = new LessonGenerator(new TimetableStore($this->database), $this->clock);
             try {
                 $created = $generator->generateAhead();
             } catch (SettingsNotFound) {

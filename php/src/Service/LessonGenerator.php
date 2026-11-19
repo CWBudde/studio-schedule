@@ -10,30 +10,47 @@ use Psr\Clock\ClockInterface;
 use StudioSchedule\Domain\Date;
 use StudioSchedule\Domain\TimeOfDay;
 
-/** @phpstan-import-type ClassRow from LessonGenerationPersistence */
+/**
+ * @phpstan-import-type ClassRow from LessonGenerationPersistence
+ * @phpstan-import-type TermRow from LessonGenerationPersistence
+ */
 final readonly class LessonGenerator
 {
     public function __construct(private LessonGenerationPersistence $store, private ClockInterface $clock) {}
 
     public function generateAhead(): int
     {
-        return $this->store->generateInTransaction(function (): int {
+        return $this->store->write(function (): int {
             $rules = $this->store->lockRules();
             $now = $this->clock->now();
             $from = Date::fromInstant($now, $rules->timezone);
             $until = $rules->generationEnd($from, $this->store->longestVisibleDays());
             $created = 0;
             foreach ($this->store->lockTerms($from, $until) as $term) {
-                $start = max($from, Date::parse($term['starts_on']));
-                $lastDay = Date::parse($term['ends_on']);
-                $end = $lastDay->compare($until) >= 0 ? $until : $lastDay->addDays(1);
                 foreach ($this->store->lockClasses($term['id']) as $class) {
-                    $created += $this->fill($class, $start, $end, $rules->timezone, $now);
+                    $created += $this->fillLockedClass($class, $term, $from, $until, $rules->timezone, $now);
                 }
             }
 
             return $created;
         });
+    }
+
+    /**
+     * The caller holds the term and class locks in the current transaction.
+     * @param ClassRow $class
+     * @param TermRow $term
+     */
+    public function fillLockedClass(array $class, array $term, Date $from, Date $until, DateTimeZone $zone, DateTimeImmutable $after): int
+    {
+        $from = max($from, Date::parse($term['starts_on']));
+        $lastDay = Date::parse($term['ends_on']);
+        $until = $lastDay->compare($until) >= 0 ? $until : $lastDay->addDays(1);
+        if ($class['retired'] || $from->compare($until) >= 0) {
+            return 0;
+        }
+
+        return $this->fill($class, $from, $until, $zone, $after);
     }
 
     /** @param ClassRow $class */
