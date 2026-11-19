@@ -80,6 +80,16 @@ final class Database
         return str_starts_with($text, '0000-') ? '0001' . substr($text, 4) . ' BC' : $text;
     }
 
+    /** Convert a PostgreSQL interval using Go's 30-day months. */
+    public static function intervalMicros(string $column): string
+    {
+        $years = "EXTRACT(YEAR FROM $column)";
+        $remainder = "$column - make_interval(years => CAST($years AS integer))";
+        $secondsPerYear = 360 * 86400;
+
+        return "CAST((EXTRACT(EPOCH FROM ($remainder)) + $years * $secondsPerYear) * 1000000 AS BIGINT)";
+    }
+
     /** @return array{string,string} Inclusive microsecond bounds for a half-open interval. */
     public static function sqlRange(Connection $connection, DateTimeImmutable $start, DateTimeImmutable $end): array
     {

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -74,10 +75,10 @@ func settingsAndBranding(t *testing.T, b *backend) {
 	}
 
 	checkRegionalSettings(t, b, guest, office, admin)
-	checkBookingRules(t, b, office)
+	checkBookingRules(t, b, office, admin)
 }
 
-func checkBookingRules(t *testing.T, b *backend, office *http.Client) {
+func checkBookingRules(t *testing.T, b *backend, office, admin *http.Client) {
 	t.Helper()
 
 	const path = "/api/v1/admin/settings/booking-rules"
@@ -128,6 +129,21 @@ func checkBookingRules(t *testing.T, b *backend, office *http.Client) {
 	}
 	if got := read[rules](t, get(t, b, office, path)); got != want {
 		t.Errorf("booking rules changed after preview: got %+v, want %+v", got, want)
+	}
+
+	update := request{method: http.MethodPut, path: path, body: `{"releaseWeekday":5,"releaseTime":"09:00","releaseWeeksAhead":8,` +
+		`"bookingCutoffMinutes":15,"cancellationCutoffMinutes":1440,"waitlistInviteExpiryMinutes":360,"defaultVisibleDays":14}`}
+	b.call(t, office, update, http.StatusForbidden)
+	if got := read[rules](t, b.call(t, admin, update, http.StatusOK)); got.ReleaseWeeksAhead != 8 || got.GeneratedLessons <= 0 {
+		t.Fatalf("widening the booking rules did not generate lessons: %+v", got)
+	}
+	if got := read[rules](t, b.call(t, admin, update, http.StatusOK)); got.GeneratedLessons != 0 {
+		t.Fatalf("repeating the booking rules update generated %d lessons", got.GeneratedLessons)
+	}
+	update.body = strings.Replace(update.body, `"releaseWeeksAhead":8`, `"releaseWeeksAhead":53`, 1)
+	b.call(t, admin, update, http.StatusUnprocessableEntity)
+	if got := read[rules](t, get(t, b, office, path)); got.ReleaseWeeksAhead != 8 || got.BookingCutoffMinutes != 15 || got.GeneratedLessons != 0 {
+		t.Fatalf("stored booking rules: %+v", got)
 	}
 }
 

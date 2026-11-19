@@ -15,6 +15,7 @@ use StudioSchedule\Receipt\AttachmentStore;
 use StudioSchedule\Receipt\Attachments;
 use StudioSchedule\Store\JobLocks;
 use StudioSchedule\Store\JobRunStore;
+use StudioSchedule\Store\LessonGenerationStore;
 use StudioSchedule\Store\OutboxStore;
 use StudioSchedule\Store\PushOutboxStore;
 use StudioSchedule\Store\RetentionStore;
@@ -22,6 +23,7 @@ use StudioSchedule\Store\SessionStore;
 
 final readonly class BackgroundJobs
 {
+    public const string GENERATE_LESSONS = 'generate-lessons';
     public const string DELIVER_MAIL = 'deliver-mail';
     public const string DELIVER_PUSH = 'deliver-push';
     public const string PURGE_SESSIONS = 'purge-sessions';
@@ -44,6 +46,21 @@ final readonly class BackgroundJobs
     {
         return $this->runner->runDue(self::PURGE_SESSIONS, new DateInterval('PT1H'), function (): void {
             (new SessionStore($this->database))->purgeExpired($this->clock->now());
+        });
+    }
+
+    public function generateLessons(): ?JobResult
+    {
+        return $this->runner->runDue(self::GENERATE_LESSONS, new DateInterval('PT1H'), function (): void {
+            $generator = new LessonGenerator(new LessonGenerationStore($this->database), $this->clock);
+            try {
+                $created = $generator->generateAhead();
+            } catch (SettingsNotFound) {
+                return;
+            }
+            if ($created > 0) {
+                $this->logger->info('lessons generated', ['created' => $created]);
+            }
         });
     }
 

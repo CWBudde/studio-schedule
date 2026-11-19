@@ -60,9 +60,9 @@ final readonly class ScheduleStore implements SchedulePersistence
         $cancel = 'cancellation_cutoff';
         $invite = 'waitlist_invite_expiry';
         if ($this->isPostgres()) {
-            $book = self::intervalMicros($book);
-            $cancel = self::intervalMicros($cancel);
-            $invite = self::intervalMicros($invite);
+            $book = Database::intervalMicros($book);
+            $cancel = Database::intervalMicros($cancel);
+            $invite = Database::intervalMicros($invite);
         }
         $row = $this->connection->fetchAssociative(
             'SELECT timezone, release_weekday, release_time, release_weeks_ahead, released_through, '
@@ -84,6 +84,36 @@ final readonly class ScheduleStore implements SchedulePersistence
             self::integer($row['cancellation_micros']),
             self::integer($row['invite_micros']),
         );
+    }
+
+    /** @param Closure(ScheduleRules):ScheduleRules $change */
+    public function changeBookingRules(Closure $change): ScheduleRules
+    {
+        return Database::retryWrite($this->connection, function () use ($change): ScheduleRules {
+            $rules = $change($this->lockRules());
+            $duration = $this->isPostgres() ? "CAST(? AS BIGINT) * INTERVAL '1 microsecond'" : '?';
+            $this->connection->executeStatement(
+                'UPDATE settings SET release_weekday = ?, release_time = ?, release_weeks_ahead = ?, released_through = ?, '
+                . "default_visible_days = ?, booking_cutoff = $duration, cancellation_cutoff = $duration, waitlist_invite_expiry = $duration",
+                [$rules->releaseWeekday, (string) $rules->releaseTime, $rules->releaseWeeksAhead,
+                    $rules->releasedThrough === null ? null : (string) $rules->releasedThrough, $rules->defaultVisibleDays,
+                    $rules->bookingCutoffMicros, $rules->cancellationCutoffMicros, $rules->waitlistInviteExpiryMicros],
+            );
+
+            return $rules;
+        });
+    }
+
+    public function lockRules(): ScheduleRules
+    {
+        if ($this->isPostgres()) {
+            $this->connection->executeStatement("SET LOCAL DateStyle TO 'ISO, YMD'");
+        }
+        if ($this->connection->fetchOne('SELECT 1 FROM settings WHERE id = TRUE FOR UPDATE') === false) {
+            throw new SettingsNotFound();
+        }
+
+        return $this->rules();
     }
 
     public function lessons(DateTimeImmutable $from, DateTimeImmutable $to, array $filters): array
@@ -363,17 +393,6 @@ final readonly class ScheduleStore implements SchedulePersistence
     private function optionalId(mixed $value): ?string
     {
         return $value === null ? null : $this->id($value);
-    }
-
-    private static function intervalMicros(string $column): string
-    {
-        // Go interprets every interval month as 30 days. PostgreSQL's epoch
-        // extraction instead reads 12 months as a 365.25-day year.
-        $years = "EXTRACT(YEAR FROM $column)";
-        $remainder = "$column - make_interval(years => CAST($years AS integer))";
-        $secondsPerYear = 360 * 86400;
-
-        return "CAST((EXTRACT(EPOCH FROM ($remainder)) + $years * $secondsPerYear) * 1000000 AS BIGINT)";
     }
 
     private function sqlInstant(DateTimeImmutable $instant): string

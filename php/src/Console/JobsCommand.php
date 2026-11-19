@@ -57,6 +57,7 @@ final readonly class JobsCommand
 
             $jobs = new BackgroundJobs($database, $dsn, $clock, new NullLogger());
             $plan = [
+                BackgroundJobs::GENERATE_LESSONS => $jobs->generateLessons(...),
                 BackgroundJobs::PURGE_SESSIONS => $jobs->purgeSessions(...),
                 BackgroundJobs::PURGE_MAIL => $jobs->purgeMail(...),
                 BackgroundJobs::PURGE_PERSONAL_DATA => $jobs->purgePersonalData(...),

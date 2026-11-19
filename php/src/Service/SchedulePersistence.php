@@ -20,6 +20,9 @@ interface SchedulePersistence
 
     public function rules(): ScheduleRules;
 
+    /** @param Closure(ScheduleRules):ScheduleRules $change */
+    public function changeBookingRules(Closure $change): ScheduleRules;
+
     /**
      * @param array{location?: string, instructor?: string, courseType?: string, level?: string} $filters
      * @return list<PublishedLesson>

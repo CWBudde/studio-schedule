@@ -36,6 +36,7 @@ use StudioSchedule\Push\Sender;
 use StudioSchedule\Service\AdminSettings;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\BookingRuleSettings;
+use StudioSchedule\Service\LessonGenerator;
 use StudioSchedule\Service\CommonPasswords;
 use StudioSchedule\Service\DatabaseReadiness;
 use StudioSchedule\Service\Family;
@@ -52,6 +53,7 @@ use StudioSchedule\Store\Database;
 use StudioSchedule\Store\DatabaseCopy;
 use StudioSchedule\Store\EventStore;
 use StudioSchedule\Store\FamilyStore;
+use StudioSchedule\Store\LessonGenerationStore;
 use StudioSchedule\Store\MailLogStore;
 use StudioSchedule\Store\PasswordResetStore;
 use StudioSchedule\Store\PersonExportStore;
@@ -155,12 +157,13 @@ final class Bootstrap
                 $sessionStore = new SessionStore($connection);
                 $sessions = new SessionMiddleware($config, new SessionAuthentication($sessionStore, $clock));
                 $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
-                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $pushSender): void {
+                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $logger, $pushSender): void {
                     $app->get('/api/v1/auth/me', new MeEndpoint($sessionStore));
                     $settingsStore = new PublicSettingsStore($connection);
                     $scheduleStore = new ScheduleStore($connection);
                     (new PublicSettingsEndpoint(new PublicSettings($settingsStore)))->register($app);
-                    (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($scheduleStore, $clock)))->register($app);
+                    $generator = new LessonGenerator(new LessonGenerationStore($connection), $clock);
+                    (new AdminSettingsRoutes(new AdminSettings($settingsStore), new BookingRuleSettings($scheduleStore, $clock, $generator, $logger)))->register($app);
                     CatalogRoutes::register($app, new CatalogStore($connection));
                     EventRoutes::register($app, new EventStore($connection), $clock);
                     $familyStore = new FamilyStore($connection);

@@ -281,6 +281,7 @@ final class OperatorTest extends TestCase
             $jobEnv = ['SMTP_HOST' => 'localhost', 'SMTP_FROM' => 'cron@example.test', 'SMTP_TLS' => 'none', 'DATABASE_URL' => $dsn];
             [$jobCode, $jobOutput, $jobError] = self::execute(['jobs:run'], ['SMTP_HOST' => '', 'SMTP_FROM' => ''] + $jobEnv, postgresMigrations: $postgresMigrations);
             self::assertSame(0, $jobCode, $jobError);
+            self::assertStringContainsString('generate-lessons ok', $jobOutput);
             self::assertStringContainsString('purge-sessions', $jobOutput);
             self::assertStringContainsString('purge-mail ok', $jobOutput);
             self::assertStringContainsString('purge-personal-data ok', $jobOutput);

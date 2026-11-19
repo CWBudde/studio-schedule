@@ -17,6 +17,7 @@ use Psr\Clock\ClockInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Log\AbstractLogger;
+use Psr\Log\NullLogger;
 use Slim\Factory\AppFactory;
 use Slim\Psr7\Factory\ResponseFactory;
 use Slim\Psr7\Factory\ServerRequestFactory;
@@ -26,6 +27,8 @@ use StudioSchedule\Domain\AccentColor;
 use StudioSchedule\Domain\BrandingImage;
 use StudioSchedule\Http\PublicSettingsEndpoint;
 use StudioSchedule\Service\PublicSettings;
+use StudioSchedule\Service\BackgroundJobs;
+use StudioSchedule\Service\JobResult;
 use StudioSchedule\Service\SchoolSetup;
 use StudioSchedule\Service\SetupInput;
 use StudioSchedule\Service\SystemClock;
@@ -67,8 +70,9 @@ final class PublicSettingsTest extends TestCase
         }
         try {
             if (self::$dsn !== null) {
-                foreach (['event_registrations', 'events', 'passes', 'pass_types', 'lessons', 'staff', 'rooms', 'locations',
-                    'course_types', 'sessions', 'account_tokens', 'accounts', 'persons', 'settings'] as $table) {
+                foreach (['booking_events', 'bookings', 'event_registrations', 'events', 'passes', 'pass_types', 'lessons',
+                    'class_members', 'classes', 'terms', 'staff', 'rooms', 'locations', 'course_types', 'sessions',
+                    'account_tokens', 'accounts', 'persons', 'settings', 'job_runs'] as $table) {
                     $this->db->executeStatement('DELETE FROM ' . $table);
                 }
             }
@@ -579,6 +583,148 @@ final class PublicSettingsTest extends TestCase
         self::assertSame($before, self::decoded($this->adminRequest('GET', 'booking-rules', clock: $clock)));
     }
 
+    public function testSavingWiderBookingRulesGeneratesOnlyMissingSlotsAndBooksClassMembers(): void
+    {
+        $clock = $this->generationFixture();
+        $this->db->executeStatement("UPDATE accounts SET role = 'office'");
+        $values = self::generationRules();
+        $path = 'booking-rules';
+        self::assertSame(403, $this->adminRequest('PUT', $path, $values, clock: $clock)->getStatusCode());
+        $this->db->executeStatement("UPDATE accounts SET role = 'admin'");
+        foreach ([['releaseTime' => '25:00'], ['releasedThrough' => '2027-12-01'], ['bookingCutoffMinutes' => 43201],
+            ['releaseWeeksAhead' => 0], ['waitlistInviteExpiryMinutes' => 0], ['defaultVisibleDays' => '20']] as $invalid) {
+            $error = $this->adminRequest('PUT', $path, $invalid + $values, clock: $clock);
+            self::assertSame(422, $error->getStatusCode());
+            $details = self::decoded($error)['errors'];
+            self::assertIsArray($details);
+            self::assertIsArray($details[0]);
+            self::assertSame('body.' . array_key_first($invalid), $details[0]['location']);
+        }
+        $unchangedHorizon = ['releaseWeeksAhead' => 2] + $values;
+        $narrow = self::decoded($this->adminRequest('PUT', $path, $unchangedHorizon, clock: $clock));
+        self::assertSame(0, $narrow['generatedLessons']);
+        self::assertSame(['2026-10-27'], $this->db->fetchFirstColumn('SELECT slot_date FROM lessons'));
+
+        $saved = self::decoded($this->adminRequest('PUT', $path, $values, clock: $clock));
+        self::assertSame(3, $saved['generatedLessons']);
+        self::assertEquals($values, array_intersect_key($saved, $values));
+        self::assertSame(['2026-10-25', '2026-10-27', '2026-11-08', '2026-11-15'], $this->db->fetchFirstColumn('SELECT slot_date FROM lessons ORDER BY slot_date'));
+        $times = $this->db->fetchNumeric("SELECT starts_at, ends_at FROM lessons WHERE slot_date = '2026-10-25'");
+        self::assertIsArray($times);
+        self::assertIsString($times[0]);
+        self::assertIsString($times[1]);
+        self::assertSame('2026-10-25T00:30:00+00:00', (new DateTimeImmutable($times[0], new \DateTimeZone('UTC')))->format('c'));
+        self::assertSame('2026-10-25T01:15:00+00:00', (new DateTimeImmutable($times[1], new \DateTimeZone('UTC')))->format('c'));
+        self::assertEquals([
+            ['2026-10-25', 'Ada', 'member', 'booked', 0, null],
+            ['2026-11-08', 'Ada', 'member', 'booked', 0, null],
+            ['2026-11-15', 'Ada', 'member', 'booked', 0, null],
+            ['2026-11-15', 'Mia', 'member', 'booked', 1, null],
+        ], $this->db->fetchAllNumeric(
+            'SELECT l.slot_date, p.given_name, b.source, e.status, CASE WHEN e.override THEN 1 ELSE 0 END, e.actor_account_id '
+            . 'FROM lessons l JOIN bookings b ON b.lesson_id = l.id JOIN persons p ON p.id = b.person_id '
+            . 'JOIN booking_events e ON e.booking_id = b.id ORDER BY l.slot_date, p.given_name',
+        ));
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM pass_redemptions'), [0, '0']);
+
+        $again = self::decoded($this->adminRequest('PUT', $path, $values, clock: $clock));
+        self::assertSame(0, $again['generatedLessons']);
+        $read = self::decoded($this->adminRequest('GET', $path, clock: $clock));
+        self::assertSame($again, $read);
+    }
+
+    public function testGenerationFailurePreservesRulesAndTheHourlyJobRecovers(): void
+    {
+        $clock = $this->generationFixture();
+        $postgres = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform;
+        if ($postgres) {
+            $this->db->executeStatement(<<<'SQL'
+                CREATE FUNCTION fixture_refuse_booking_event() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RAISE EXCEPTION 'fixture refused booking event'; END;
+                $$
+                SQL);
+        }
+        $reject = $postgres ? 'EXECUTE FUNCTION fixture_refuse_booking_event()' : "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'fixture refused booking event'";
+        $this->db->executeStatement('CREATE TRIGGER fixture_refuse_booking_event BEFORE INSERT ON booking_events FOR EACH ROW ' . $reject);
+        try {
+            // Manual release past the weekly rule widens the horizon without changing weeks or early access.
+            $values = ['releaseWeeksAhead' => 2, 'releasedThrough' => '2026-12-01'] + self::generationRules();
+            $response = $this->adminRequest('PUT', 'booking-rules', $values, clock: $clock);
+            self::assertSame(200, $response->getStatusCode());
+            $saved = self::decoded($response);
+            self::assertSame(0, $saved['generatedLessons']);
+            self::assertSame('2026-12-01', $saved['releasedThrough']);
+            self::assertSame(['2026-10-27'], $this->db->fetchFirstColumn('SELECT slot_date FROM lessons'));
+            self::assertSame([], $this->db->fetchFirstColumn('SELECT id FROM bookings'));
+        } finally {
+            $this->db->executeStatement('DROP TRIGGER fixture_refuse_booking_event' . ($postgres ? ' ON booking_events' : ''));
+            if ($postgres) {
+                $this->db->executeStatement('DROP FUNCTION fixture_refuse_booking_event()');
+            }
+        }
+
+        $jobs = new BackgroundJobs($this->db, self::fixtureDsn(), $clock, new NullLogger());
+        self::assertSame(JobResult::Ok, $jobs->generateLessons());
+        self::assertNull($jobs->generateLessons());
+        self::assertSame(['ok'], $this->db->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'generate-lessons'"));
+        self::assertSame(['2026-10-25', '2026-10-27', '2026-11-08', '2026-11-15'], $this->db->fetchFirstColumn('SELECT slot_date FROM lessons ORDER BY slot_date'));
+        self::assertContains($this->db->fetchOne('SELECT COUNT(*) FROM booking_events'), [4, '4']);
+    }
+
+    public function testGenerationClampsLongTermsToTheLongestAccountHorizon(): void
+    {
+        $clock = $this->generationFixture();
+        $this->db->executeStatement("UPDATE terms SET ends_on = '9999-12-31'");
+        $this->db->executeStatement('UPDATE accounts SET visible_days = 60');
+
+        $response = $this->adminRequest('PUT', 'booking-rules', self::generationRules(), clock: $clock);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(9, self::decoded($response)['generatedLessons']);
+        self::assertSame('2026-12-27', $this->db->fetchOne('SELECT MAX(slot_date) FROM lessons'));
+    }
+
+    /** @return array<string, int|string> */
+    private static function generationRules(): array
+    {
+        return [
+            'releaseWeekday' => 0, 'releaseTime' => '18:00', 'releaseWeeksAhead' => 3,
+            'bookingCutoffMinutes' => 25, 'cancellationCutoffMinutes' => 180, 'waitlistInviteExpiryMinutes' => 150,
+            'defaultVisibleDays' => 14,
+        ];
+    }
+
+    private function generationFixture(): ClockInterface
+    {
+        $this->initialize();
+        $now = new DateTimeImmutable('2026-10-25T00:00:00Z');
+        $this->openSettingsSession($now);
+        $clock = self::createStub(ClockInterface::class);
+        $clock->method('now')->willReturn($now);
+        $location = $this->insertRegionalFixture('locations', ['name' => 'Fixture location']);
+        $room = $this->insertRegionalFixture('rooms', ['name' => 'Room', 'capacity' => 10, 'location_id' => $location, 'position' => 1]);
+        $teacher = $this->insertRegionalFixture('staff', ['display_name' => 'Fixture instructor', 'kind' => 'instructor', 'active' => true]);
+        $course = $this->insertRegionalFixture('course_types', ['name' => 'Fixture ballet']);
+        $term = $this->insertRegionalFixture('terms', ['name' => 'Autumn', 'starts_on' => '2026-10-18', 'ends_on' => '2026-11-15']);
+        $links = ['course_type_id' => $course, 'room_id' => $room, 'instructor_id' => $teacher, 'capacity' => 1];
+        $class = $this->insertRegionalFixture('classes', $links + ['term_id' => $term, 'weekday' => 0, 'start_time' => '02:30:00', 'duration'
+            => $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform ? '45 minutes' : 2_700_000_000]);
+        $this->db->executeStatement(
+            'INSERT INTO classes (id, term_id, weekday, start_time, duration, course_type_id, room_id, instructor_id, capacity, retired) '
+            . 'SELECT ?, term_id, weekday, start_time, duration, course_type_id, room_id, instructor_id, capacity, TRUE FROM classes WHERE id = ?',
+            [$this->fixtureId(), $class],
+        );
+        $person = $this->db->fetchOne('SELECT person_id FROM accounts');
+        $second = $this->insertRegionalFixture('persons', ['given_name' => 'Mia', 'family_name' => 'Example']);
+        $this->db->insert('class_members', ['class_id' => $class, 'person_id' => $person]);
+        $this->db->insert('class_members', ['class_id' => $class, 'person_id' => $second, 'since' => '2026-11-07', 'paused_until' => '2026-11-08']);
+        $this->insertRegionalFixture('lessons', $links + [
+            'class_id' => $class, 'slot_date' => '2026-10-27', 'starts_at' => '2026-11-02 12:00:00',
+            'ends_at' => '2026-11-02 12:45:00', 'status' => 'canceled', 'visibility' => 'public', 'kind' => 'regular',
+        ]);
+
+        return $clock;
+    }
+
     /** @param array<string, string|bool> $expected */
     private function assertRegionalSettings(array $expected): void
     {
@@ -588,12 +734,18 @@ final class PublicSettingsTest extends TestCase
     /** @param array<string, mixed> $values */
     private function insertRegionalFixture(string $table, array $values): string
     {
-        $uuid = Uuid::v7();
-        $id = $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform ? $uuid->toRfc4122() : $uuid->toBinary();
+        $id = $this->fixtureId();
         $types = isset($values['active']) ? ['active' => ParameterType::BOOLEAN] : [];
         $this->db->insert($table, ['id' => $id] + $values, $types);
 
         return $id;
+    }
+
+    private function fixtureId(): string
+    {
+        $uuid = Uuid::v7();
+
+        return $this->db->getDatabasePlatform() instanceof PostgreSQLPlatform ? $uuid->toRfc4122() : $uuid->toBinary();
     }
 
     private function openSettingsSession(?DateTimeImmutable $now = null): void

@@ -1455,8 +1455,10 @@ backends.
     - [x] Read booking rules and preview release windows using the school time zone. The shared
           `settings_and_branding` case verifies the stored and preview windows on all three PHP
           databases at both mount paths with the authentication draft.
-    - [ ] Save booking rules and generate lessons with their class-member bookings when a change
-          widens the window.
+    - [x] Save booking rules and generate lessons with their class-member bookings when a change
+          widens the window. The hourly `generate-lessons` job fills missing slots, including after
+          a failed generation attempt. The shared `settings_and_branding` case passes on all three
+          PHP databases at both mount paths with the authentication draft.
   - [ ] Announcements, mail log, statistics (ADR 0014)
     - [x] Serve the administrator mail log with filtered search, detail and audited requeue.
           Secret-link bodies stay private. Tests pass on PostgreSQL, MySQL and MariaDB,

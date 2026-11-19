@@ -38,7 +38,7 @@ final readonly class AdminSettingsRoutes
             $routes->map(['GET', 'PUT'], '/branding', $this->branding(...));
             $routes->map(['PUT', 'DELETE'], '/branding/background', $this->background(...));
             $routes->map(['GET', 'PUT'], '/regional', $this->regional(...));
-            $routes->get('/booking-rules', $this->bookingRules(...));
+            $routes->map(['GET', 'PUT'], '/booking-rules', $this->bookingRules(...));
             $routes->get('/booking-rules/preview', $this->preview(...));
         })->add(self::authorize(...));
     }
@@ -142,7 +142,40 @@ final readonly class AdminSettingsRoutes
 
     private function bookingRules(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
     {
-        return Responses::json($response, $this->bookingRules->read());
+        if ($request->getMethod() !== 'PUT') {
+            return Responses::json($response, $this->bookingRules->read());
+        }
+        $body = JsonObject::read($request);
+        if ($body instanceof ResponseInterface) {
+            return $body;
+        }
+        $fields = self::fields($body, [
+            'releaseweekday', 'releasetime', 'releaseweeksahead', 'releasedthrough', 'bookingcutoffminutes',
+            'cancellationcutoffminutes', 'waitlistinviteexpiryminutes', 'defaultvisibledays',
+        ]);
+        $time = self::text($fields, 'releaseTime', required: true);
+        $through = self::text($fields, 'releasedThrough');
+        try {
+            $at = TimeOfDay::parse($time);
+        } catch (InvalidArgumentException) {
+            throw new AdminSettingsFieldError('releaseTime', 'invalid time of day');
+        }
+        try {
+            $date = $through === null ? null : Date::parse($through);
+        } catch (InvalidArgumentException) {
+            throw new AdminSettingsFieldError('releasedThrough', 'invalid released-through date');
+        }
+
+        return Responses::json($response, $this->bookingRules->update(
+            self::bodyInteger($fields, 'releaseWeekday', 0, 6),
+            $at,
+            self::bodyInteger($fields, 'releaseWeeksAhead', 1, 52),
+            $date,
+            self::bodyInteger($fields, 'bookingCutoffMinutes', 0, 43200),
+            self::bodyInteger($fields, 'cancellationCutoffMinutes', 0, 43200),
+            self::bodyInteger($fields, 'waitlistInviteExpiryMinutes', 1, 43200),
+            self::bodyInteger($fields, 'defaultVisibleDays', 1, 366),
+        ));
     }
 
     private function preview(#[SensitiveParameter] ServerRequestInterface $request, ResponseInterface $response): ResponseInterface
@@ -195,6 +228,21 @@ final readonly class AdminSettingsRoutes
         $value = (int) $text;
 
         return preg_match('/\A[+-]?[0-9]+\z/', $text) === 1 && $value >= $min && $value <= $max ? $value : null;
+    }
+
+    /** @param array<array-key, mixed> $fields */
+    private static function bodyInteger(array $fields, string $field, int $min, int $max): int
+    {
+        $key = strtolower($field);
+        if (!array_key_exists($key, $fields)) {
+            throw new AdminSettingsFieldError('', "expected required property $field to be present");
+        }
+        $value = $fields[$key];
+        if (!is_int($value) || $value < $min || $value > $max) {
+            throw new AdminSettingsFieldError($field, "expected an integer between $min and $max");
+        }
+
+        return $value;
     }
 
     /**

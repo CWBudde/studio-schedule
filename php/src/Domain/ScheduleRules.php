@@ -61,6 +61,16 @@ final readonly class ScheduleRules
         );
     }
 
+    public function generationEnd(Date $today, int $longestVisibleDays): Date
+    {
+        $days = max(7 * ($this->releaseWeeksAhead + 2), $this->defaultVisibleDays, $longestVisibleDays) + 7;
+        if ($this->releasedThrough !== null) {
+            $days = max($days, $today->daysUntil($this->releasedThrough) + 7);
+        }
+
+        return $today->addDays($days + 1);
+    }
+
     public function midnight(Date $date): DateTimeImmutable
     {
         return $date->at(TimeOfDay::parse('00:00'), $this->timezone);
