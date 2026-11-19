@@ -31,6 +31,21 @@ final class AfterResponseTest extends TestCase
         self::assertSame(['response flushed', 'mail delivered'], $events);
     }
 
+    public function testPushRegisteredFirstRunsAfterMail(): void
+    {
+        $jobs = [];
+        $after = new AfterResponse();
+        $after->wake('deliver-push', static function () use (&$jobs): void {
+            $jobs[] = 'push';
+        }, runLast: true);
+        $after->wake('deliver-mail', static function () use (&$jobs): void {
+            $jobs[] = 'mail';
+        });
+        $after->run(static fn(): bool => true);
+
+        self::assertSame(['mail', 'push'], $jobs);
+    }
+
     public function testTheJobWaitsForCronIfTheResponseCannotBeFinished(): void
     {
         $after = new AfterResponse();

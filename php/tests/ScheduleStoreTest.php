@@ -11,6 +11,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Exception\DriverException;
 use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
+use Doctrine\DBAL\Exception\RetryableException;
 use Doctrine\DBAL\Logging\Middleware;
 use Doctrine\DBAL\ParameterType;
 use Doctrine\DBAL\Platforms\PostgreSQLPlatform;
@@ -27,6 +28,8 @@ use Slim\Psr7\Factory\ServerRequestFactory;
 use Slim\Psr7\Factory\StreamFactory;
 use Stringable;
 use StudioSchedule\Http\CatalogAdminRoutes;
+use StudioSchedule\Bootstrap;
+use StudioSchedule\Http\AfterResponse;
 use StudioSchedule\Http\AttendanceRoutes;
 use StudioSchedule\Http\EventRegistrationRoutes;
 use StudioSchedule\Http\EventRoutes;
@@ -40,6 +43,8 @@ use StudioSchedule\Http\TeachingScheduleRoutes;
 use StudioSchedule\Http\StatisticsEndpoint;
 use StudioSchedule\Http\TrustedProxies;
 use StudioSchedule\Http\WaitlistInviteEndpoint;
+use StudioSchedule\Push\Sender;
+use StudioSchedule\Push\VapidKeys;
 use StudioSchedule\Service\BackgroundJobs;
 use StudioSchedule\Service\CatalogFailure;
 use StudioSchedule\Service\Attendance;
@@ -753,6 +758,159 @@ final class ScheduleStoreTest extends TestCase
         );
         $this->database->executeStatement("UPDATE events SET signup_closes_at = NULL WHERE slug = 'winter-workshop'");
         self::get($app, $link, status: 404);
+    }
+
+    public function testCommittedInvitesWakePushOnlyAfterTheResponse(): void
+    {
+        $dsn = getenv('STUDIO_PHP_TEST_DATABASE_URL');
+        self::assertIsString($dsn);
+        $keys = VapidKeys::generate();
+        $environment = [
+            'DATABASE_URL' => $dsn,
+            'BASE_URL' => 'https://school.example.test/dance',
+            'LOG_LEVEL' => 'error',
+            'SMTP_HOST' => '',
+            'VAPID_PUBLIC_KEY' => $keys->publicKey(),
+            'VAPID_PRIVATE_KEY' => $keys->privateKey(),
+            'VAPID_SUBJECT' => 'mailto:push@example.test',
+        ];
+        $clock = self::createStub(ClockInterface::class);
+        $clock->method('now')->willReturn(new DateTimeImmutable(self::BEFORE_RELEASE));
+        $token = 'fixture-office-session';
+        $hash = hash('sha256', $token, true);
+        $this->database->executeStatement("UPDATE accounts SET confirmed_at = '2026-10-24 18:00:00'");
+        $this->insert('sessions', [
+            'id' => 310, 'account_id' => 11, 'token_hash' => $this->postgres ? '\\x' . bin2hex($hash) : $hash,
+            'created_at' => '2026-10-24 18:00:00', 'last_seen_at' => '2026-10-24 18:00:00', 'expires_at' => '2026-10-26 18:00:00',
+        ]);
+        foreach ([311, 312] as $id) {
+            // The invalid curve point makes the real sender stop before opening a connection.
+            $this->insert('push_subscriptions', [
+                'id' => $id, 'account_id' => 10, 'endpoint' => "https://push.example.test/device/$id",
+                'p256dh' => $this->postgres ? '\\x' . str_repeat('41', 65) : str_repeat('A', 65),
+                'auth' => $this->postgres ? '\\x' . str_repeat('42', 16) : str_repeat('B', 16),
+                'created_at' => '2026-10-24 18:00:00', 'last_used_at' => '2026-10-24 18:00:00',
+            ]);
+        }
+        $this->insert('event_registrations', [
+            'id' => 224, 'event_id' => 120, 'person_id' => 6, 'status' => 'waiting', 'payment' => 'paid',
+            'price' => 0, 'vat_rate_bp' => 0, 'created_at' => '2026-10-24 18:00:00', 'updated_at' => '2026-10-24 18:00:00',
+        ]);
+        $this->insertLesson(108, '2026-10-31', 'regular', 'public', [
+            'status' => 'canceled', 'canceled_at' => '2026-10-24 18:00:00', 'canceled_by' => 11,
+        ]);
+        foreach ([313 => 103, 314 => 108] as $id => $lesson) {
+            $this->insert('waitlist_entries', [
+                'id' => $id, 'lesson_id' => $lesson, 'person_id' => 2, 'status' => 'waiting', 'stay_on_list' => false,
+                'joined_at' => '2026-10-24 18:00:00',
+            ]);
+        }
+
+        $request = static function (string $path, ?AfterResponse $after, ?string $body = null) use ($token, $environment, $clock): ResponseInterface {
+            $request = (new ServerRequestFactory())->createServerRequest('POST', 'https://school.example.test/dance/api/v1' . $path)
+                ->withCookieParams(['studio_session' => $token]);
+            if ($body !== null) {
+                $request = $request->withHeader('Content-Type', 'application/json')->withBody((new StreamFactory())->createStream($body));
+            }
+
+            return Bootstrap::handle(
+                static fn() => $request,
+                dirname(__DIR__),
+                __DIR__,
+                getenv('STUDIO_PHP_TEST_POSTGRES_MIGRATIONS') ?: __DIR__ . '/../../internal/store/postgres/migrations',
+                static fn(string $key): ?string => $environment[$key] ?? null,
+                getenv('STUDIO_PHP_TEST_COMMON_PASSWORDS') ?: __DIR__ . '/../../internal/auth/password/common-passwords.txt',
+                $clock,
+                $after,
+            );
+        };
+        $runs = fn(): array => $this->database->fetchFirstColumn("SELECT result FROM job_runs WHERE job = 'deliver-push'");
+        $pending = fn(): array => $this->database->fetchFirstColumn('SELECT id FROM push_outbox WHERE attempts = 0');
+        $finish = function (int $expected) use ($pending): Closure {
+            return static function () use ($expected, $pending): bool {
+                self::assertCount($expected, $pending(), 'Push delivery started before the response finished');
+
+                return true;
+            };
+        };
+
+        $eventAfter = new AfterResponse();
+        $response = $request('/admin/event-registrations/' . self::id(221) . '/cancel', $eventAfter, '{"refund":false}');
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertCount(2, $pending());
+        self::assertSame([], $runs());
+        $eventAfter->run($finish(2));
+        self::assertSame(['ok'], $runs());
+        self::assertSame([], $pending());
+
+        $lessonAfter = new AfterResponse();
+        $response = $request('/lessons/' . self::id(103) . '/restore', $lessonAfter);
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertCount(2, $pending());
+        $lessonAfter->run($finish(2));
+        self::assertSame(['ok', 'ok'], $runs(), 'A recent run must not delay an after-response wake');
+        self::assertSame([], $pending());
+
+        $response = $request('/lessons/' . self::id(108) . '/restore', null);
+        self::assertSame(200, $response->getStatusCode(), (string) $response->getBody());
+        self::assertCount(2, $pending());
+        self::assertSame(['ok', 'ok'], $runs());
+        $cronClock = self::createStub(ClockInterface::class);
+        $cronClock->method('now')->willReturn(new DateTimeImmutable('2026-10-25T17:01:00Z'));
+        $cron = new BackgroundJobs($this->database, $dsn, $cronClock, new NullLogger());
+        self::assertSame(JobResult::Ok, $cron->deliverPush(new Sender($keys, $environment['VAPID_SUBJECT'], $cronClock)));
+        self::assertSame([], $pending());
+        self::assertSame(['ok', 'ok', 'ok'], $runs());
+    }
+
+    public function testPushWakeIsDiscardedAcrossRetriesAndRollbacks(): void
+    {
+        $this->insert('push_subscriptions', [
+            'id' => 301, 'account_id' => 10, 'endpoint' => 'https://push.example.test/device',
+            'p256dh' => $this->postgres ? '\\x' . str_repeat('41', 65) : str_repeat('A', 65),
+            'auth' => $this->postgres ? '\\x' . str_repeat('42', 16) : str_repeat('B', 16),
+            'created_at' => '2026-10-24 18:00:00', 'last_used_at' => '2026-10-24 18:00:00',
+        ]);
+        $events = new EventStore($this->database);
+        $wakes = 0;
+        $wake = function () use (&$wakes): void {
+            self::assertFalse($this->database->isTransactionActive(), 'Push wake ran inside the write transaction');
+            ++$wakes;
+        };
+        $messages = new EventWaitlistStore($this->database, static fn() => $events->afterCommit(BackgroundJobs::DELIVER_PUSH, $wake));
+        $now = new DateTimeImmutable(self::BEFORE_RELEASE);
+        $expires = $now->modify('+1 hour');
+        $queue = static fn() => $messages->enqueuePush([self::id(301)], '{}', $now, $expires);
+
+        $failure = null;
+        try {
+            $events->write(static function () use ($queue): never {
+                $queue();
+                throw new RuntimeException('Fixture rollback after queuing push');
+            });
+        } catch (RuntimeException $error) {
+            $failure = $error->getMessage();
+        }
+        self::assertSame('Fixture rollback after queuing push', $failure);
+        self::assertSame(0, $wakes);
+
+        $attempts = 0;
+        $events->write(static function () use ($queue, &$attempts): void {
+            if (++$attempts === 1) {
+                $queue();
+                throw new class ('Retry after queuing push') extends RuntimeException implements RetryableException {};
+            }
+        });
+        self::assertSame(2, $attempts);
+        self::assertSame(0, $wakes);
+        self::assertSame([], $this->database->fetchFirstColumn('SELECT id FROM push_outbox'));
+
+        $events->write(static function () use ($queue): void {
+            $queue();
+            $queue();
+        });
+        self::assertSame(1, $wakes);
+        self::assertCount(2, $this->database->fetchFirstColumn('SELECT id FROM push_outbox'));
     }
 
     public function testEventInviteExpiryQueuesTheNextReachableOfferInCron(): void

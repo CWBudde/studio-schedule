@@ -20,7 +20,7 @@ use StudioSchedule\Service\EventData;
 use StudioSchedule\Service\EventPersistence;
 use Symfony\Component\Uid\Uuid;
 
-final readonly class EventStore implements EventPersistence
+final class EventStore implements EventPersistence
 {
     private const string EVENT = <<<'SQL'
         SELECT e.id, e.slug, e.title, e.description, e.course_type_id, ct.name AS course_type_name,
@@ -47,9 +47,12 @@ final readonly class EventStore implements EventPersistence
     private const string IMAGE = 'SELECT i.image_type, i.image FROM events e LEFT JOIN event_images i ON i.event_id = e.id';
     private const string PUBLIC_SLUG = " WHERE e.slug = ? AND e.status IN ('published', 'canceled')";
 
-    private ScheduleStore $schedule;
+    private readonly ScheduleStore $schedule;
 
-    public function __construct(private Connection $connection)
+    /** @var array<string,Closure():void> */
+    private array $afterCommit = [];
+
+    public function __construct(private readonly Connection $connection)
     {
         $this->schedule = new ScheduleStore($connection);
     }
@@ -61,13 +64,30 @@ final readonly class EventStore implements EventPersistence
 
     public function write(Closure $operation): mixed
     {
-        return Database::retryWrite($this->connection, function () use ($operation): mixed {
-            if ($this->isPostgres()) {
-                $this->connection->executeStatement("SET LOCAL DateStyle TO 'ISO, YMD'");
-            }
+        try {
+            $result = Database::retryWrite($this->connection, function () use ($operation): mixed {
+                $this->afterCommit = [];
+                if ($this->isPostgres()) {
+                    $this->connection->executeStatement("SET LOCAL DateStyle TO 'ISO, YMD'");
+                }
 
-            return $operation();
-        }, readCommitted: true);
+                return $operation();
+            }, readCommitted: true);
+            $callbacks = $this->afterCommit;
+        } finally {
+            $this->afterCommit = [];
+        }
+        foreach ($callbacks as $run) {
+            $run();
+        }
+
+        return $result;
+    }
+
+    /** @param Closure():void $run Register a wake from within write(). */
+    public function afterCommit(string $name, Closure $run): void
+    {
+        $this->afterCommit[$name] = $run;
     }
 
     public function slugInUse(string $slug): bool

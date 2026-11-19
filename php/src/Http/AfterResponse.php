@@ -9,13 +9,13 @@ use Throwable;
 
 final class AfterResponse
 {
-    /** @var array<string,Closure():void> */
+    /** @var array<string,array{run:Closure():void,runLast:bool}> */
     private array $jobs = [];
 
     /** @param Closure():void $run */
-    public function wake(string $name, Closure $run): void
+    public function wake(string $name, Closure $run, bool $runLast = false): void
     {
-        $this->jobs[$name] = $run;
+        $this->jobs[$name] = ['run' => $run, 'runLast' => $runLast];
     }
 
     /** @param Closure():bool $finish */
@@ -27,9 +27,10 @@ final class AfterResponse
             return;
         }
 
+        uasort($jobs, static fn(array $a, array $b): int => $a['runLast'] <=> $b['runLast']);
         foreach ($jobs as $name => $job) {
             try {
-                $job();
+                $job['run']();
             } catch (Throwable $error) {
                 error_log('studio-schedule after-response job ' . $name . ' failed: ' . $error::class);
             }

@@ -19,6 +19,8 @@ container=
 postgres_container=
 postgres_dsn=
 coverage_dir=$(mktemp -d "${TMPDIR:-/tmp}/studio-schedule-php-coverage.XXXXXXXX")
+# Serializing and merging the coverage objects need more memory than the tests.
+coverage_php=(php -d memory_limit=512M)
 cleanup() {
 	if [[ -n $container ]]; then
 		docker rm -f "$container" >/dev/null 2>&1 || true
@@ -117,7 +119,7 @@ for engine in "${engines[@]}"; do
 	report="/coverage/$engine.php"
 	run_php --network "$network" -e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" \
 		-e "STUDIO_PHP_TEST_INSTALLER_URL=$installer_dsn" \
-		-v "$coverage_dir:/coverage" "$image" php vendor/bin/phpunit --exclude-group schema-equivalence --exclude-group database-copy --coverage-php "$report"
+		-v "$coverage_dir:/coverage" "$image" "${coverage_php[@]}" vendor/bin/phpunit --exclude-group schema-equivalence --exclude-group database-copy --coverage-php "$report"
 	reports+=("$report")
 	if [[ $engine == postgres ]]; then
 		postgres_container=$container
@@ -133,7 +135,7 @@ for engine in "${engines[@]}"; do
 		copy_report="/coverage/copy-$engine.php"
 		run_php --network "$network" -e "STUDIO_PHP_TEST_POSTGRES_URL=$postgres_dsn" \
 			-e "STUDIO_PHP_TEST_DATABASE_URL=$dsn" -v "$coverage_dir:/coverage" \
-			"$image" php vendor/bin/phpunit --group database-copy --coverage-php "$copy_report"
+			"$image" "${coverage_php[@]}" vendor/bin/phpunit --group database-copy --coverage-php "$copy_report"
 		reports+=("$copy_report")
 	fi
 	docker rm -f "$container" >/dev/null
@@ -145,9 +147,8 @@ done
 if [[ ${#engines[@]} == 3 ]]; then
 	sodium_report=/coverage/password-sodium.php
 	run_php -v "$coverage_dir:/coverage" "$image" \
-		php -d disable_functions=password_algos vendor/bin/phpunit \
+		"${coverage_php[@]}" -d disable_functions=password_algos vendor/bin/phpunit \
 		--filter PasswordHashTest --coverage-php "$sodium_report"
 	reports=(--gate "${reports[@]}" "$sodium_report")
 fi
-# The merge loads coverage objects for multiple engines into one PHP process.
-run_php -v "$coverage_dir:/coverage:ro" "$image" php -d memory_limit=512M tools/check-coverage.php "${reports[@]}"
+run_php -v "$coverage_dir:/coverage:ro" "$image" "${coverage_php[@]}" tools/check-coverage.php "${reports[@]}"

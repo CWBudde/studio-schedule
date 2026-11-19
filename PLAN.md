@@ -1610,9 +1610,13 @@ backends.
           The shared `push_subscriptions` case now verifies device labels and removal through
           the privacy export on all three PHP databases at both mount paths with the authentication
           draft.
-          Waiting-list invite queueing and after-response delivery are open.
     - [x] Render lesson and event invite push text in English and German using the Go fixtures.
           The notification names the lesson or event without naming the participant.
+    - [x] Wake push delivery after a committed event offer or lesson edit or restoration queues
+          a notification. Run it after the PHP-FPM response and after any scheduled mail, using
+          the cron job's lock. Tests cover both offer paths, rollback, retry and cron fallback on
+          PostgreSQL, MySQL and MariaDB.
+    - [ ] Queue and wake push for the remaining lesson waitlist writes when those routes land.
   - [ ] Events and workshops (Phase 10). Event registration handling in person merge and office
         anonymization remains open under ADRs 0015 and 0016.
     - [x] Serve public event details and images, including past and canceled events. Drafts

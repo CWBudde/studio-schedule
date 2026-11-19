@@ -145,13 +145,17 @@ final readonly class BackgroundJobs
             : $this->runner->runDue(self::DELIVER_MAIL, new DateInterval('PT1M'), $work);
     }
 
-    public function deliverPush(Sender $sender): ?JobResult
+    public function deliverPush(Sender $sender, bool $immediate = false): ?JobResult
     {
-        return $this->runner->runDue(self::DELIVER_PUSH, new DateInterval('PT1M'), function () use ($sender): void {
+        $work = function () use ($sender): void {
             $sent = (new PushDelivery(new PushOutboxStore($this->database), $this->clock, $sender))->deliver();
             if ($sent > 0) {
                 $this->logger->info('push messages sent', ['sent' => $sent]);
             }
-        });
+        };
+
+        return $immediate
+            ? $this->runner->runNow(self::DELIVER_PUSH, $work)
+            : $this->runner->runDue(self::DELIVER_PUSH, new DateInterval('PT1M'), $work);
     }
 }

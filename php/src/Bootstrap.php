@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace StudioSchedule;
 
 use Monolog\Formatter\JsonFormatter;
+use Closure;
 use Monolog\Handler\StreamHandler;
 use Monolog\Level;
 use Monolog\Logger;
@@ -224,24 +225,38 @@ final class Bootstrap
             }
 
 
+            $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
             $wakeMail = null;
             $wakeAnnouncements = null;
+            $wakePush = null;
             if ($afterResponse !== null) {
-                $wake = static function (bool $announcements) use ($afterResponse, $appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
+                /** @param Closure(BackgroundJobs):void $work */
+                $runJobs = static function (Closure $work) use ($config, $expectedVersions, $clock, $logger): void {
+                    $database = Database::connect($config->databaseURL, dedicated: true);
+                    try {
+                        if ((new DatabaseReadiness(new Schema($database), $expectedVersions, $logger))->ready()) {
+                            $work(new BackgroundJobs(
+                                $database,
+                                $config->databaseURL,
+                                $clock,
+                                $logger,
+                                collectMetrics: $config->metricsToken !== '',
+                            ));
+                        }
+                    } finally {
+                        $database->close();
+                    }
+                };
+                $wake = static function (bool $announcements) use ($afterResponse, $appDirectory, $environment, $runJobs): void {
                     $name = $announcements ? BackgroundJobs::ANNOUNCEMENTS : BackgroundJobs::DELIVER_MAIL;
-                    $afterResponse->wake($name, static function () use ($announcements, $appDirectory, $environment, $config, $expectedVersions, $clock, $logger): void {
+                    $afterResponse->wake($name, static function () use ($announcements, $appDirectory, $environment, $runJobs): void {
                         $lookup = Config::lookup($appDirectory . '/config/.env', $environment);
                         $mailer = $announcements ? null : SmtpMailer::fromEnvironment($lookup);
                         if (!$announcements && $mailer === null) {
                             return;
                         }
 
-                        $database = Database::connect($config->databaseURL, dedicated: true);
-                        try {
-                            if (!(new DatabaseReadiness(new Schema($database), $expectedVersions, $logger))->ready()) {
-                                return;
-                            }
-                            $jobs = new BackgroundJobs($database, $config->databaseURL, $clock, $logger, collectMetrics: $config->metricsToken !== '');
+                        $runJobs(static function (BackgroundJobs $jobs) use ($announcements, $lookup, $mailer): void {
                             if ($announcements) {
                                 if ($jobs->queueAnnouncements(immediate: true) !== JobResult::Ok) {
                                     return;
@@ -251,13 +266,21 @@ final class Bootstrap
                             if ($mailer !== null) {
                                 $jobs->deliverMail($mailer, immediate: true);
                             }
-                        } finally {
-                            $database->close();
-                        }
+                        });
                     });
                 };
                 $wakeMail = static fn() => $wake(false);
                 $wakeAnnouncements = static fn() => $wake(true);
+                $wakePush = static function () use ($afterResponse, $pushSender, $runJobs): void {
+                    $afterResponse->wake(BackgroundJobs::DELIVER_PUSH, static function () use ($pushSender, $runJobs): void {
+                        $sender = $pushSender();
+                        if ($sender !== null) {
+                            $runJobs(static function (BackgroundJobs $jobs) use ($sender): void {
+                                $jobs->deliverPush($sender, immediate: true);
+                            });
+                        }
+                    }, runLast: true);
+                };
             }
 
             $installer = $config->setupToken === ''
@@ -287,12 +310,11 @@ final class Bootstrap
             if ($connection !== null) {
                 $sessionStore = new SessionStore($connection);
                 $sessions = new SessionMiddleware($config, new SessionAuthentication($sessionStore, $clock));
-                $pushSender = static fn(): ?Sender => Sender::fromEnvironment(Config::lookup($appDirectory . '/config/.env', $environment), $clock);
                 $applicationURL = static fn(): string => Config::applicationURL(
                     $config->baseURL,
                     Config::lookup($appDirectory . '/config/.env', $environment)('HTTP_ADDR'),
                 );
-                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $wakeAnnouncements, $pushSender, $applicationURL): void {
+                $registerRoutes = static function (App $app) use ($sessionStore, $connection, $clock, $config, $logger, $commonPasswordFile, $wakeMail, $wakeAnnouncements, $wakePush, $pushSender, $applicationURL): void {
                     $profile = new MeEndpoint($sessionStore);
                     $limits = new RateLimitStore($connection, $clock, $logger);
                     $mailLimit = new AuthMailLimit($config->trustedProxies, $limits);
@@ -357,7 +379,10 @@ final class Bootstrap
                     $eventStore = new EventStore($connection);
                     $registrationStore = new EventRegistrationStore($connection);
                     $eventRegistrations = new EventRegistrationReads($eventStore, $registrationStore, $clock);
-                    $lessonRecipients = new EventWaitlistStore($connection);
+                    $lessonRecipients = new EventWaitlistStore(
+                        $connection,
+                        $wakePush === null ? null : static fn() => $eventStore->afterCommit(BackgroundJobs::DELIVER_PUSH, $wakePush),
+                    );
                     $lessonWrites = new LessonWriteStore($connection);
                     $lessonParticipants = new LessonRecipients($lessonWrites, $registrationStore, new ScheduleRecipients($lessonRecipients));
                     (new LessonNoticeRoutes(new LessonNotices(

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StudioSchedule\Store;
 
+use Closure;
 use DateTimeImmutable;
 use DateTimeZone;
 use Doctrine\DBAL\ArrayParameterType;
@@ -24,7 +25,8 @@ final readonly class EventWaitlistStore implements EventWaitlistPersistence
 {
     private const string DUE = "status = 'invited' AND expires_at <= ?";
 
-    public function __construct(private Connection $db) {}
+    /** @param (Closure():void)|null $onPushQueued */
+    public function __construct(private Connection $db, private ?Closure $onPushQueued = null) {}
 
     public function dueEvents(DateTimeImmutable $now): array
     {
@@ -197,6 +199,9 @@ final readonly class EventWaitlistStore implements EventWaitlistPersistence
                 [$this->encodeId(Uuid::v7()->toRfc4122()), $this->encodeId($id), $payload, $created, $deadline, $created],
                 [$idType, $idType, ParameterType::STRING, ParameterType::STRING, ParameterType::STRING, ParameterType::STRING],
             );
+        }
+        if ($subscriptionIds !== []) {
+            $this->onPushQueued?->__invoke();
         }
     }
 

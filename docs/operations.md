@@ -541,8 +541,10 @@ as gone.
 On PHP-FPM, a completed password reset that queues a notification wakes mail delivery after the
 HTTP response has been sent. Publishing an emailed announcement due now also wakes the
 announcement job after the response. It queues up to 100 recipients per run and wakes mail
-delivery when SMTP is configured. Cron processes later batches and handles queued mail on
-other PHP hosts or when a job is already running.
+delivery when SMTP is configured. A waiting-list offer that commits a push notification wakes
+`deliver-push` after the response, following any mail scheduled by the same request. Cron
+processes later batches and handles queued mail and push on other PHP hosts or when a job is
+already running.
 
 ### One instance
 
